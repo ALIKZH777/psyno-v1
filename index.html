@@ -37,6 +37,7 @@
             overflow: hidden;
         }
 
+        /* [اصلاح شد] تغییر در ساختار صفحه برای حل مشکل همپوشانی */
         .page {
             display: none;
             position: absolute;
@@ -45,19 +46,20 @@
             width: 100%;
             height: 100%;
             background-color: #f0f2f5;
-            flex-direction: column;
-            overflow: hidden;
+            /* خود صفحه اسکرول می‌خورد */
+            overflow-y: auto;
+            /* پدینگ برای جلوگیری از همپوشانی با نوار بالا و پایین */
+            padding: 1rem;
+            padding-bottom: 6rem; /* 4rem برای نوار + 2rem فاصله */
         }
 
         .page.active {
-            display: flex;
+            display: block; /* تغییر از flex به block */
+            animation: slideIn 0.3s ease-out forwards;
         }
         
-        .main-content {
-            flex-grow: 1;
-            overflow-y: auto;
-            padding-bottom: 120px; /* افزایش بیشتر فاصله برای حل مشکل هم‌پوشانی */
-        }
+        /* این کلاس دیگر استفاده نمی‌شود */
+        .main-content { }
 
         .bottom-nav {
             position: fixed;
@@ -65,6 +67,7 @@
             left: 0;
             right: 0;
             z-index: 1000;
+            height: 4rem; /* h-16 */
         }
 
         /* انیمیشن برای ورود صفحات */
@@ -72,10 +75,7 @@
             from { transform: translateX(100%); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
         }
-        .page.active {
-            animation: slideIn 0.3s ease-out forwards;
-        }
-
+        
         /* استایل سفارشی برای مودال */
         .modal-backdrop {
             position: fixed;
@@ -109,7 +109,7 @@
 <body class="bg-gray-100">
 
     <!-- Loading Spinner -->
-    <div id="loading-spinner" class="fixed inset-0 bg-white/80 z-50 flex items-center justify-center backdrop-blur-sm">
+    <div id="loading-spinner" class="fixed inset-0 bg-white/80 z-50 flex items-center justify-center backdrop-blur-sm hidden">
         <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-teal-500"></div>
     </div>
 
@@ -284,6 +284,7 @@
         const targetPage = document.getElementById(pageId);
         if (targetPage) {
             targetPage.classList.add('active');
+            targetPage.scrollTop = 0; // همیشه به بالای صفحه اسکرول کن
         }
         
         // آپدیت حالت فعال در نویگیشن
@@ -338,6 +339,7 @@
         hideLoading();
     });
 
+    // [اصلاح شد] منطق ثبت نام برای جلوگیری از خطا و ثبت صحیح نقش
     signupForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         showLoading();
@@ -346,34 +348,44 @@
         const fullName = document.getElementById('signup-fullname').value;
         const role = document.getElementById('signup-role').value;
 
+        // مرحله ۱: ثبت نام کاربر در سرویس Auth
         const { data, error } = await db.auth.signUp({
             email,
             password,
             options: {
                 data: {
+                    // این اطلاعات توسط تریگر در پایگاه داده برای ساخت پروفایل اولیه استفاده می‌شود
                     full_name: fullName,
-                    role: role // This data is used by the trigger
                 }
             }
         });
         
         if (error) {
             showToast(`خطا در ثبت‌نام: ${error.message}`, 'error');
-        } else {
-            // The handle_new_user trigger in Supabase will create the profile.
-            // We need to update the role separately as it's not part of the standard signup metadata.
-            setTimeout(async () => {
-                const { error: profileError } = await db
-                    .from('profiles')
-                    .update({ role: role })
-                    .eq('id', data.user.id);
-                if (profileError) {
-                   console.error("Error updating role:", profileError);
-                }
-            }, 1000);
-
-            showToast('ثبت‌نام موفقیت‌آمیز بود. لطفاً ایمیل خود را برای تایید بررسی کنید.', 'info');
+            hideLoading();
+            return;
         }
+
+        // مرحله ۲: اگر کاربر با موفقیت ساخته شد، نقش او را در جدول پروفایل‌ها ثبت می‌کنیم
+        // این کار برای اطمینان از ثبت صحیح نقش انجام می‌شود، حتی اگر تریگر پایگاه داده آن را انجام ندهد
+        if (data.user) {
+            const { error: profileError } = await db
+                .from('profiles')
+                .update({ role: role })
+                .eq('id', data.user.id);
+
+            if (profileError) {
+                console.error("Error updating role after signup:", profileError);
+                // به کاربر اطلاع می‌دهیم که مشکلی در تنظیم نقش وجود داشته
+                showToast('ثبت‌نام انجام شد، اما در تنظیم نقش خطایی رخ داد.', 'error');
+            } else {
+                showToast('ثبت‌نام موفقیت‌آمیز بود. لطفاً ایمیل خود را برای تایید بررسی کنید.', 'info');
+            }
+        } else {
+             // حالتی که کاربر از قبل وجود دارد ولی تایید نشده
+             showToast('لطفاً ایمیل خود را برای تکمیل ثبت‌نام تایید کنید.', 'info');
+        }
+
         hideLoading();
     });
 
@@ -395,8 +407,10 @@
     // =================================================================
 
     db.auth.onAuthStateChange(async (event, session) => {
+        showLoading();
         if (session && session.user) {
             currentUser = session.user;
+            // تلاش برای دریافت پروفایل کاربر
             const { data, error } = await db
                 .from('profiles')
                 .select('*')
@@ -405,11 +419,25 @@
 
             if (data) {
                 userProfile = data;
+                // اگر نقش کاربر هنوز ثبت نشده (مثلا به خاطر تاخیر تریگر)، یک بار دیگر تلاش می‌کنیم
+                if (!userProfile.role) {
+                    console.warn("User role is null, attempting to re-fetch...");
+                    // یک تاخیر کوتاه برای اینکه مطمئن شویم تریگر پایگاه داده کارش را کرده
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                    const { data: refreshedProfile, error: refreshError } = await db
+                         .from('profiles')
+                         .select('*')
+                         .eq('id', currentUser.id)
+                         .single();
+                    if(refreshedProfile) userProfile = refreshedProfile;
+                }
+
                 authPage.classList.remove('active');
                 appContainer.classList.remove('hidden');
                 await setupUIForRole(userProfile.role);
             } else {
                 console.error("Profile not found for user.", error);
+                showToast('پروفایل شما یافت نشد، لطفاً دوباره وارد شوید.', 'error');
                 handleLogout();
             }
         } else {
@@ -424,6 +452,14 @@
     const setupUIForRole = async (role) => {
         const navBar = document.getElementById('bottom-nav-bar');
         navBar.innerHTML = ''; // Clear previous navigation
+
+        // اطمینان حاصل شود که رول معتبر است، در غیر این صورت به کاربر اطلاع داده شود
+        if (!['client', 'therapist', 'admin'].includes(role)) {
+            showToast(`نقش کاربری "${role || 'نامشخص'}" تعریف نشده است.`, 'error');
+            console.error(`Invalid role detected: ${role}`);
+            handleLogout();
+            return;
+        }
 
         if (role === 'client') {
             navBar.innerHTML = `
@@ -493,7 +529,6 @@
                 })
             });
             if (!response.ok) {
-                // Try to get more specific error info from the response body
                 const errorBody = await response.json().catch(() => null);
                 const errorMessage = errorBody?.error?.message || `API request failed with status ${response.status}`;
                 throw new Error(errorMessage);
@@ -502,9 +537,8 @@
             return data.candidates[0].content.parts[0].text;
         } catch (error) {
             console.error("Gemini API Error:", error);
-            // Check for the specific "Failed to fetch" which is often a CORS or network issue
             if (error instanceof TypeError && error.message === 'Failed to fetch') {
-                return "خطا در برقراری ارتباط با سرور هوش مصنوعی. لطفاً اتصال اینترنت خود را بررسی کرده و دوباره تلاش کنید. (این مشکل ممکن است به دلیل محدودیت‌های شبکه باشد)";
+                return "خطا در برقراری ارتباط با سرور هوش مصنوعی. لطفاً اتصال اینترنت خود را بررسی کرده و دوباره تلاش کنید.";
             }
             return `متاسفانه در ارتباط با دستیار هوشمند مشکلی پیش آمده: ${error.message}`;
         }
@@ -517,8 +551,9 @@
     // --- CLIENT: DASHBOARD ---
     const renderClientDashboard = async () => {
         const page = document.getElementById('client-dashboard-page');
+        // [اصلاح شد] حذف کلاس main-content
         page.innerHTML = `
-            <div class="main-content p-4 space-y-6">
+            <div class="space-y-6">
                 <div class="flex justify-between items-center">
                     <div>
                         <h1 class="text-2xl font-bold text-gray-800">سلام، ${userProfile.full_name.split(' ')[0]}!</h1>
@@ -780,15 +815,7 @@
     // --- CLIENT: TESTS ---
     const psychologicalTests = [
         { id: 'phq9', name: 'تست افسردگی (PHQ-9)', questions: [
-            "عدم علاقه یا لذت در انجام کارها",
-            "احساس ناراحتی، افسردگی یا ناامیدی",
-            "مشکل در به خواب رفتن، در خواب ماندن یا خواب زیاد",
-            "احساس خستگی یا کمبود انرژی",
-            "کم اشتهایی یا پرخوری",
-            "احساس بدی نسبت به خود، یا اینکه یک شکست خورده هستید",
-            "مشکل در تمرکز کردن روی کارها",
-            "کند شدن در حرکت یا صحبت کردن، یا برعکس بی‌قراری",
-            "افکار مربوط به اینکه بهتر است بمیرید یا به خود آسیب بزنید"
+            "عدم علاقه یا لذت در انجام کارها", "احساس ناراحتی، افسردگی یا ناامیدی", "مشکل در به خواب رفتن، در خواب ماندن یا خواب زیاد", "احساس خستگی یا کمبود انرژی", "کم اشتهایی یا پرخوری", "احساس بدی نسبت به خود، یا اینکه یک شکست خورده هستید", "مشکل در تمرکز کردن روی کارها", "کند شدن در حرکت یا صحبت کردن، یا برعکس بی‌قراری", "افکار مربوط به اینکه بهتر است بمیرید یا به خود آسیب بزنید"
         ], options: ["اصلا", "چندین روز", "بیش از نیمی از روزها", "تقریبا هر روز"], interpretation: (score) => {
             if (score <= 4) return "علائم افسردگی حداقلی یا عدم وجود آن. وضعیت شما خوب است.";
             if (score <= 9) return "افسردگی خفیف. ممکن است نیاز به پیگیری داشته باشید.";
@@ -797,13 +824,7 @@
             return "افسردگی شدید. لطفاً فوراً برای دریافت کمک حرفه‌ای اقدام کنید.";
         }},
         { id: 'gad7', name: 'تست اضطراب (GAD-7)', questions: [
-            "احساس عصبانیت، اضطراب یا دلشوره",
-            "عدم توانایی در متوقف کردن یا کنترل نگرانی",
-            "نگرانی بیش از حد در مورد چیزهای مختلف",
-            "مشکل در آرام شدن",
-            "آنقدر بی‌قرار بودن که نشستن سخت است",
-            "زودرنج یا تحریک‌پذیر شدن",
-            "احساس ترس، انگار که اتفاق وحشتناکی قرار است بیفتد"
+            "احساس عصبانیت، اضطراب یا دلشوره", "عدم توانایی در متوقف کردن یا کنترل نگرانی", "نگرانی بیش از حد در مورد چیزهای مختلف", "مشکل در آرام شدن", "آنقدر بی‌قرار بودن که نشستن سخت است", "زودرنج یا تحریک‌پذیر شدن", "احساس ترس، انگار که اتفاق وحشتناکی قرار است بیفتد"
         ], options: ["اصلا", "چندین روز", "بیش از نیمی از روزها", "تقریبا هر روز"], interpretation: (score) => {
             if (score <= 4) return "اضطراب حداقلی. وضعیت شما طبیعی است.";
             if (score <= 9) return "اضطراب خفیف. مراقبت از خود را فراموش نکنید.";
@@ -815,7 +836,7 @@
     const renderClientTests = async () => {
         const page = document.getElementById('client-tests-page');
         page.innerHTML = `
-            <div class="main-content p-4">
+            <div>
                 <h1 class="text-2xl font-bold text-gray-800 mb-6">تست‌های روانشناسی</h1>
                 <div id="test-list" class="space-y-4">
                     ${psychologicalTests.map(test => `
@@ -911,7 +932,7 @@
         const page = document.getElementById('client-appointments-page');
         showLoading();
         page.innerHTML = `
-            <div class="main-content p-4">
+            <div>
                 <h1 class="text-2xl font-bold text-gray-800 mb-6">نوبت‌های من و رزرو جدید</h1>
                 <div id="appointments-list" class="space-y-4">
                     <p class="text-center text-gray-500">در حال بارگذاری نوبت‌ها...</p>
@@ -958,7 +979,7 @@
                 <div class="flex justify-between items-start">
                     <div>
                         <p class="font-bold text-lg">دکتر ${apt.therapist.full_name}</p>
-                        <p class="text-sm text-gray-600">${new persianDate(new Date(apt.appointment_time)).format('dddd D MMMM𒑳 - ساعت HH:mm')}</p>
+                        <p class="text-sm text-gray-600">${new persianDate(new Date(apt.appointment_time)).format('dddd D MMMM YYYY - ساعت HH:mm')}</p>
                     </div>
                     <span class="text-sm font-semibold px-3 py-1 rounded-full ${apt.status === 'booked' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}">${apt.status === 'booked' ? 'رزرو شده' : apt.status}</span>
                 </div>
@@ -1048,7 +1069,7 @@
     const renderClientProfile = async () => {
         const page = document.getElementById('client-profile-page');
         page.innerHTML = `
-            <div class="main-content p-4 space-y-6">
+            <div class="space-y-6">
                 <div class="flex flex-col items-center space-y-2">
                     <div class="w-24 h-24 rounded-full bg-teal-500 text-white flex items-center justify-center text-4xl font-bold">
                         ${userProfile.full_name.charAt(0)}
@@ -1113,15 +1134,15 @@
             .order('appointment_time', { ascending: true })
             .limit(5);
 
-        const { data: clients, error: clientError } = await db
-            .from('profiles')
-            .select('id', { count: 'exact' })
+        const { count: clientCount, error: clientError } = await db
+            .from('appointments')
+            .select('client_id', { count: 'exact', head: true })
             .eq('therapist_id', currentUser.id);
             
         hideLoading();
 
         page.innerHTML = `
-            <div class="main-content p-4 space-y-6">
+            <div class="space-y-6">
                 <h1 class="text-2xl font-bold text-gray-800">داشبورد دکتر ${userProfile.full_name.split(' ')[1] || userProfile.full_name}</h1>
                 
                 <div class="grid grid-cols-2 gap-4">
@@ -1130,7 +1151,7 @@
                         <p class="text-gray-500">نوبت آینده</p>
                     </div>
                     <div class="bg-white p-4 rounded-2xl shadow-md text-center">
-                        <p class="text-3xl font-bold text-blue-600">${clients?.length || 0}</p>
+                        <p class="text-3xl font-bold text-blue-600">${clientCount || 0}</p>
                         <p class="text-gray-500">تعداد مراجعین</p>
                     </div>
                 </div>
@@ -1159,14 +1180,27 @@
     const renderTherapistClients = async () => {
         const page = document.getElementById('therapist-clients-page');
         showLoading();
-        const { data: clients, error } = await db
-            .from('profiles')
-            .select('id, full_name, email')
+        // This query should find all unique clients who have booked an appointment with this therapist
+        const { data: clientAppointments, error } = await db
+            .from('appointments')
+            .select('client:client_id (id, full_name, email)')
             .eq('therapist_id', currentUser.id);
+        
         hideLoading();
 
+        let clients = [];
+        if (clientAppointments) {
+            const clientMap = new Map();
+            clientAppointments.forEach(apt => {
+                if (apt.client) {
+                    clientMap.set(apt.client.id, apt.client);
+                }
+            });
+            clients = Array.from(clientMap.values());
+        }
+
         page.innerHTML = `
-            <div class="main-content p-4">
+            <div>
                 <h1 class="text-2xl font-bold text-gray-800 mb-6">لیست مراجعین</h1>
                 <div id="client-list-container" class="space-y-3">
                     ${error ? '<p class="text-red-500">خطا در بارگذاری</p>' : ''}
@@ -1263,7 +1297,7 @@
         hideLoading();
 
         page.innerHTML = `
-            <div class="main-content p-4">
+            <div>
                 <h1 class="text-2xl font-bold text-gray-800 mb-6">برنامه کاری شما</h1>
                 <div class="space-y-4">
                     ${error ? '<p class="text-red-500">خطا در بارگذاری</p>' : ''}
@@ -1272,7 +1306,7 @@
                             <div class="flex justify-between items-start">
                                 <div>
                                     <p class="font-bold text-lg">${apt.client.full_name}</p>
-                                    <p class="text-sm text-gray-600">${new persianDate(new Date(apt.appointment_time)).format('dddd D MMMMspecialmeal - ساعت HH:mm')}</p>
+                                    <p class="text-sm text-gray-600">${new persianDate(new Date(apt.appointment_time)).format('dddd D MMMM YYYY - ساعت HH:mm')}</p>
                                 </div>
                                 <span class="text-sm font-semibold px-3 py-1 rounded-full ${apt.status === 'booked' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}">${apt.status}</span>
                             </div>
@@ -1287,7 +1321,7 @@
     const renderTherapistProfile = async () => {
         const page = document.getElementById('therapist-profile-page');
          page.innerHTML = `
-            <div class="main-content p-4 space-y-6">
+            <div class="space-y-6">
                 <div class="flex flex-col items-center space-y-2">
                     <div class="w-24 h-24 rounded-full bg-blue-500 text-white flex items-center justify-center text-4xl font-bold">
                         ${userProfile.full_name.charAt(0)}
@@ -1319,14 +1353,14 @@
         }
 
         page.innerHTML = `
-            <header class="bg-white shadow-sm p-4 flex items-center gap-4 sticky top-0 z-10">
+            <header class="bg-white shadow-sm p-4 flex items-center gap-4 fixed top-0 right-0 left-0 z-10">
                 <button onclick="goBackFromChat()" class="text-gray-600"><i data-lucide="arrow-right"></i></button>
                 <h1 class="font-bold text-lg">${otherUser.full_name}</h1>
             </header>
-            <div id="chat-messages" class="flex-grow p-4 space-y-4 overflow-y-auto">
+            <div id="chat-messages" class="flex-grow pt-20 pb-20 space-y-4">
                 <!-- Messages will be loaded here -->
             </div>
-            <footer class="bg-white p-2 flex items-center gap-2 sticky bottom-0">
+            <footer class="bg-white p-2 flex items-center gap-2 fixed bottom-0 right-0 left-0 border-t">
                 <input id="chat-input" type="text" class="flex-grow bg-gray-100 rounded-full py-2 px-4 focus:outline-none" placeholder="پیام خود را بنویسید...">
                 <button id="send-chat-btn" class="bg-teal-500 text-white w-10 h-10 rounded-full flex items-center justify-center">
                     <i data-lucide="send"></i>
@@ -1334,6 +1368,8 @@
             </footer>
         `;
         lucide.createIcons();
+        // برای صفحه چت، پدینگ پیش‌فرض را حذف می‌کنیم تا بتوانیم هدر و فوتر ثابت داشته باشیم
+        page.style.padding = '0';
         navigateTo('chat-page');
 
         const messageContainer = document.getElementById('chat-messages');
@@ -1349,7 +1385,7 @@
             
             if(messages) {
                 messageContainer.innerHTML = messages.map(msg => `
-                    <div class="flex ${msg.sender_id === currentUser.id ? 'justify-end' : 'justify-start'}">
+                    <div class="flex px-4 ${msg.sender_id === currentUser.id ? 'justify-end' : 'justify-start'}">
                         <div class="max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${msg.sender_id === currentUser.id ? 'bg-teal-500 text-white' : 'bg-gray-200 text-gray-800'}">
                             ${msg.message_text}
                         </div>
@@ -1391,7 +1427,7 @@
                 if ((newMessage.sender_id === currentUser.id && newMessage.receiver_id === otherUserId) || 
                     (newMessage.sender_id === otherUserId && newMessage.receiver_id === currentUser.id)) {
                     messageContainer.innerHTML += `
-                        <div class="flex ${newMessage.sender_id === currentUser.id ? 'justify-end' : 'justify-start'}">
+                        <div class="flex px-4 ${newMessage.sender_id === currentUser.id ? 'justify-end' : 'justify-start'}">
                             <div class="max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${newMessage.sender_id === currentUser.id ? 'bg-teal-500 text-white' : 'bg-gray-200 text-gray-800'}">
                                 ${newMessage.message_text}
                             </div>
@@ -1409,6 +1445,9 @@
             chatSubscription.unsubscribe();
             chatSubscription = null;
         }
+        // بازگرداندن پدینگ به حالت عادی برای صفحات دیگر
+        document.querySelectorAll('.page').forEach(p => p.style.padding = '');
+
         // بازگشت به صفحه قبلی بر اساس نقش کاربر
         if (userProfile.role === 'client') {
             navigateTo('client-appointments-page');
@@ -1425,7 +1464,7 @@
     const renderAdminDashboard = async () => {
         const page = document.getElementById('admin-dashboard-page');
         page.innerHTML = `
-            <div class="main-content p-4 space-y-6">
+            <div class="space-y-6">
                 <h1 class="text-2xl font-bold text-gray-800">پنل مدیریت ساینو</h1>
                 
                 <div class="bg-white p-4 rounded-2xl shadow-md">
@@ -1479,7 +1518,7 @@
 
 
     // Initial Load
-    showLoading(); // Show spinner on first load
+    // showLoading(); // onAuthStateChange will handle loading
 </script>
 </body>
 </html>
