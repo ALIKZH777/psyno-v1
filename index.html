@@ -54,6 +54,13 @@
             animation: slideIn 0.3s ease-out forwards;
         }
         
+        /* [اصلاح شد] استایل برای صفحه چت با چیدمان flex */
+        .page.active.flex-layout {
+            display: flex;
+            flex-direction: column;
+            height: 100%; /* اطمینان از ارتفاع کامل */
+        }
+
         .bottom-nav {
             position: fixed;
             bottom: 0;
@@ -61,6 +68,12 @@
             right: 0;
             z-index: 1000;
             height: 4rem; /* h-16 */
+            transition: transform 0.3s ease-in-out;
+        }
+        
+        /* [جدید] کلاس برای مخفی کردن منو */
+        .bottom-nav.hidden {
+            transform: translateY(100%);
         }
 
         @keyframes slideIn {
@@ -251,8 +264,8 @@
     let chatSubscription = null;
     let moodChartInstance = null;
     let clientMoodChartInstance = null;
-    // [جدید] متغیر برای نگهداری تاریخ انتخابی
     let selectedAppointmentTimestamp = null;
+    let lastPageId = 'client-dashboard-page';
 
     // =================================================================
     // UTILITY & HELPER FUNCTIONS
@@ -298,11 +311,26 @@
         }, 3000);
     };
 
+    // [اصلاح شد] منطق ناوبری برای مخفی کردن منو در صفحه چت
     const navigateTo = (pageId) => {
-        document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+        const activePage = document.querySelector('.page.active');
+        const navBar = document.getElementById('bottom-nav-bar');
+
+        if (activePage && activePage.id !== 'chat-page' && pageId !== activePage.id) {
+            lastPageId = activePage.id;
+        }
+
+        document.querySelectorAll('.page').forEach(page => page.classList.remove('active', 'flex-layout'));
         const targetPage = document.getElementById(pageId);
+
         if (targetPage) {
             targetPage.classList.add('active');
+            if (pageId === 'chat-page') {
+                targetPage.classList.add('flex-layout');
+                navBar.classList.add('hidden');
+            } else {
+                navBar.classList.remove('hidden');
+            }
             targetPage.scrollTop = 0;
         }
         
@@ -347,10 +375,11 @@
         const { error } = await db.auth.signInWithPassword({ email, password });
         if (error) {
             showToast(`خطا در ورود: ${error.message}`, 'error');
+            hideLoading();
         } else {
             showToast('با موفقیت وارد شدید!', 'success');
+            // onAuthStateChange will handle hiding the loader
         }
-        hideLoading();
     });
 
     signupForm.addEventListener('submit', async (e) => {
@@ -367,21 +396,19 @@
             options: {
                 data: {
                     full_name: fullName,
-                    role: role // Pass role directly here
+                    role: role 
                 }
             }
         });
         
         if (error) {
             showToast(`خطا در ثبت‌نام: ${error.message}`, 'error');
-            hideLoading();
-            return;
-        }
-
-        if (data.user && data.user.identities && data.user.identities.length === 0) {
-             showToast('این کاربر از قبل وجود دارد. لطفاً وارد شوید.', 'error');
         } else {
-             showToast('ثبت‌نام موفقیت‌آمیز بود. لطفاً ایمیل خود را برای تایید بررسی کنید.', 'info');
+            if (data.user && data.user.identities && data.user.identities.length === 0) {
+                 showToast('این کاربر از قبل وجود دارد. لطفاً وارد شوید.', 'error');
+            } else {
+                 showToast('ثبت‌نام موفقیت‌آمیز بود. لطفاً ایمیل خود را برای تایید بررسی کنید.', 'info');
+            }
         }
         hideLoading();
     });
@@ -403,14 +430,17 @@
     // =================================================================
 
     db.auth.onAuthStateChange(async (event, session) => {
-        showLoading();
-        if (session && session.user) {
+        if (event === 'TOKEN_REFRESHED') {
+            return; 
+        }
+
+        if (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && session)) {
+            if (currentUser && currentUser.id === session.user.id) {
+                return; // User is already logged in and processed
+            }
+            showLoading();
             currentUser = session.user;
-            const { data, error } = await db
-                .from('profiles')
-                .select('*')
-                .eq('id', currentUser.id)
-                .single();
+            const { data, error } = await db.from('profiles').select('*').eq('id', currentUser.id).single();
 
             if (data) {
                 userProfile = data;
@@ -420,15 +450,12 @@
             } else {
                 console.error("Profile not found for user.", error);
                 showToast('پروفایل شما یافت نشد، لطفاً دوباره وارد شوید.', 'error');
-                handleLogout();
+                await handleLogout();
             }
-        } else {
-            currentUser = null;
-            userProfile = null;
-            authPage.classList.add('active');
-            appContainer.classList.add('hidden');
+            hideLoading();
+        } else if (event === 'SIGNED_OUT') {
+            await handleLogout();
         }
-        hideLoading();
     });
 
     const setupUIForRole = async (role) => {
@@ -946,7 +973,6 @@
         lucide.createIcons();
     };
     
-    // [اصلاح شد] رفع خطای بارگذاری نوبت‌ها با حذف ستون ناموجود
     const loadClientAppointments = async () => {
         const listEl = document.getElementById('appointments-list');
         const { data, error } = await db
@@ -988,7 +1014,6 @@
         `}).join('');
     };
     
-    // [اصلاح شد] بازگرداندن تقویم فارسی با پیاده‌سازی صحیح
     const loadTherapistsForBooking = async () => {
         const sectionEl = document.getElementById('therapist-booking-section');
         const { data, error } = await db.from('profiles').select('id, full_name').eq('role', 'therapist');
@@ -1013,7 +1038,6 @@
             <button onclick="bookAppointment()" class="w-full bg-teal-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-600 transition">رزرو نهایی</button>
         `;
         
-        // [اصلاح شد] پیاده‌سازی صحیح تقویم فارسی با onSelect
         $('#appointment-date').persianDatepicker({
             format: 'YYYY/MM/DD HH:mm',
             timePicker: { enabled: true },
@@ -1021,17 +1045,14 @@
             observer: true,
             autoClose: true,
             onSelect: function(unix) {
-                // [جدید] ذخیره تاریخ انتخابی در متغیر
                 selectedAppointmentTimestamp = unix;
             }
         });
     };
 
-    // [اصلاح شد] رفع کامل خطای تاریخ و رزرو
     const bookAppointment = async () => {
         const therapistId = document.getElementById('therapist-select').value;
         
-        // [اصلاح شد] خواندن تاریخ از متغیر به جای اتریبیوت
         if (!selectedAppointmentTimestamp) {
             showToast('لطفاً تاریخ و ساعت را انتخاب کنید.', 'error');
             return;
@@ -1040,7 +1061,6 @@
         const appointmentTime = new Date(selectedAppointmentTimestamp).toISOString();
         
         showLoading();
-        // [اصلاح شد] حذف ستون ناموجود از کوئری
         const { error } = await db.from('appointments').insert({
             client_id: currentUser.id,
             therapist_id: therapistId,
@@ -1057,9 +1077,9 @@
             console.error("Booking Error:", error);
         } else {
             showToast('نوبت شما با موفقیت رزرو شد.', 'success');
-            selectedAppointmentTimestamp = null; // ریست کردن تاریخ انتخابی
+            selectedAppointmentTimestamp = null; 
             await renderClientAppointments();
-            await renderClientDashboard(); // رفرش داشبورد برای نمایش کارت چت
+            await renderClientDashboard(); 
         }
     };
     
@@ -1325,7 +1345,6 @@
     const renderTherapistSchedule = async () => {
         const page = document.getElementById('therapist-schedule-page');
         showLoading();
-        // [اصلاح شد] حذف ستون ناموجود از کوئری
         const { data, error } = await db
             .from('appointments')
             .select('id, appointment_time, status, client:client_id(full_name)')
@@ -1432,14 +1451,14 @@
         }
 
         page.innerHTML = `
-            <header class="bg-white shadow-sm p-4 flex items-center gap-4 fixed top-0 right-0 left-0 z-10">
+            <header class="bg-white shadow-sm p-4 flex items-center gap-4 flex-shrink-0">
                 <button onclick="goBackFromChat()" class="text-gray-600"><i data-lucide="arrow-right"></i></button>
                 <h1 class="font-bold text-lg">${otherUser.full_name}</h1>
             </header>
-            <div id="chat-messages" class="flex-grow pt-20 pb-20 space-y-4 px-4">
+            <div id="chat-messages" class="flex-grow p-4 space-y-4 overflow-y-auto">
                 <!-- Messages will be loaded here -->
             </div>
-            <footer class="bg-white p-2 flex items-center gap-2 fixed bottom-16 sm:bottom-0 right-0 left-0 border-t">
+            <footer class="bg-white p-2 flex items-center gap-2 border-t flex-shrink-0">
                 <input id="chat-input" type="text" class="flex-grow bg-gray-100 rounded-full py-2 px-4 focus:outline-none" placeholder="پیام خود را بنویسید...">
                 <button id="send-chat-btn" class="bg-teal-500 text-white w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0">
                     <i data-lucide="send"></i>
@@ -1447,7 +1466,7 @@
             </footer>
         `;
         lucide.createIcons();
-        page.style.padding = '0';
+        page.style.padding = '0'; 
         navigateTo('chat-page');
 
         const messageContainer = document.getElementById('chat-messages');
@@ -1519,13 +1538,8 @@
             chatSubscription.unsubscribe();
             chatSubscription = null;
         }
-        document.querySelectorAll('.page').forEach(p => p.style.padding = '');
-
-        if (userProfile.role === 'client') {
-            navigateTo('client-dashboard-page');
-        } else {
-            navigateTo('therapist-clients-page');
-        }
+        document.getElementById('chat-page').style.padding = ''; 
+        navigateTo(lastPageId);
     };
 
 
