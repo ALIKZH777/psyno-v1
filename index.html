@@ -17,7 +17,7 @@
     <!-- Chart.js for visualizations -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <!-- Persian Date Picker -->
+    <!-- کتابخانه‌های تقویم فارسی -->
     <link rel="stylesheet" href="https://unpkg.com/persian-datepicker@1.2.0/dist/css/persian-datepicker.min.css"/>
     <script src="https://unpkg.com/jquery@3.3.1/dist/jquery.min.js"></script>
     <script src="https://unpkg.com/persian-date@1.1.0/dist/persian-date.min.js"></script>
@@ -31,13 +31,11 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* برای حس بهتر اپلیکیشن موبایل */
         html, body {
             height: 100%;
             overflow: hidden;
         }
 
-        /* [اصلاح شد] تغییر در ساختار صفحه برای حل مشکل همپوشانی */
         .page {
             display: none;
             position: absolute;
@@ -46,21 +44,16 @@
             width: 100%;
             height: 100%;
             background-color: #f0f2f5;
-            /* خود صفحه اسکرول می‌خورد */
             overflow-y: auto;
-            /* پدینگ برای جلوگیری از همپوشانی با نوار بالا و پایین */
             padding: 1rem;
-            padding-bottom: 6rem; /* 4rem برای نوار + 2rem فاصله */
+            padding-bottom: 6rem; /* 4rem for nav + 2rem space */
         }
 
         .page.active {
-            display: block; /* تغییر از flex به block */
+            display: block;
             animation: slideIn 0.3s ease-out forwards;
         }
         
-        /* این کلاس دیگر استفاده نمی‌شود */
-        .main-content { }
-
         .bottom-nav {
             position: fixed;
             bottom: 0;
@@ -70,13 +63,11 @@
             height: 4rem; /* h-16 */
         }
 
-        /* انیمیشن برای ورود صفحات */
         @keyframes slideIn {
             from { transform: translateX(100%); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
         }
         
-        /* استایل سفارشی برای مودال */
         .modal-backdrop {
             position: fixed;
             top: 0;
@@ -98,19 +89,48 @@
             border-radius: 12px;
             width: 90%;
             max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
         }
         
-        /* استایل برای DatePicker */
+        /* استایل برای تقویم فارسی */
         .pdp-group {
             direction: ltr;
+        }
+
+        /* انیمیشن لودینگ زیبا */
+        #loading-spinner .loader {
+            width: 50px;
+            height: 50px;
+            display: grid;
+            animation: s4 4s infinite;
+        }
+        #loading-spinner .loader::before,
+        #loading-spinner .loader::after {
+            content: "";
+            grid-area: 1/1;
+            border: 8px solid;
+            border-radius: 50%;
+            border-color: #14B8A6 #14B8A6 #0000 #0000;
+            mix-blend-mode: darken;
+            animation: s4 1s infinite linear;
+        }
+        #loading-spinner .loader::after {
+            border-color: #0000 #0000 #3b82f6 #3b82f6;
+            animation-direction: reverse;
+        }
+        @keyframes s4 {
+            100% {
+                transform: rotate(1turn);
+            }
         }
     </style>
 </head>
 <body class="bg-gray-100">
 
-    <!-- Loading Spinner -->
+    <!-- انیمیشن لودینگ جدید -->
     <div id="loading-spinner" class="fixed inset-0 bg-white/80 z-50 flex items-center justify-center backdrop-blur-sm hidden">
-        <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-teal-500"></div>
+        <div class="loader"></div>
     </div>
 
     <!-- =================================================================
@@ -122,59 +142,61 @@
          AUTH PAGES (Login / Signup)
     ================================================================== -->
     <div id="auth-page" class="page active bg-gradient-to-br from-teal-400 to-blue-500">
-        <div class="w-full max-w-md m-auto p-8">
-            <div class="text-center mb-10">
-                <h1 class="text-5xl font-bold text-white">ساینو</h1>
-                <p class="text-white/80 mt-2">دستیار هوشمند سلامت روان شما</p>
-            </div>
-            
-            <!-- Login Form -->
-            <div id="login-form-container">
-                <form id="login-form" class="bg-white/20 backdrop-blur-lg p-8 rounded-2xl shadow-lg space-y-6">
-                    <h2 class="text-2xl font-bold text-white text-center">ورود به حساب کاربری</h2>
-                    <div>
-                        <label for="login-email" class="block text-sm font-medium text-white">ایمیل</label>
-                        <input type="email" id="login-email" required class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 placeholder-gray-600 focus:ring-2 focus:ring-white">
-                    </div>
-                    <div>
-                        <label for="login-password" class="block text-sm font-medium text-white">رمز عبور</label>
-                        <input type="password" id="login-password" required class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 placeholder-gray-600 focus:ring-2 focus:ring-white">
-                    </div>
-                    <button type="submit" class="w-full bg-white text-teal-600 font-bold py-3 rounded-lg hover:bg-gray-100 transition duration-300 shadow-md">ورود</button>
-                    <p class="text-center text-sm text-white">
-                        حساب کاربری ندارید؟ <a href="#" id="show-signup" class="font-bold hover:underline">ثبت‌نام کنید</a>
-                    </p>
-                </form>
-            </div>
+        <div class="w-full h-full flex items-center justify-center">
+            <div class="w-full max-w-md m-auto p-8">
+                <div class="text-center mb-10">
+                    <h1 class="text-5xl font-bold text-white">ساینو</h1>
+                    <p class="text-white/80 mt-2">دستیار هوشمند سلامت روان شما</p>
+                </div>
+                
+                <!-- Login Form -->
+                <div id="login-form-container">
+                    <form id="login-form" class="bg-white/20 backdrop-blur-lg p-8 rounded-2xl shadow-lg space-y-6">
+                        <h2 class="text-2xl font-bold text-white text-center">ورود به حساب کاربری</h2>
+                        <div>
+                            <label for="login-email" class="block text-sm font-medium text-white">ایمیل</label>
+                            <input type="email" id="login-email" required class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 placeholder-gray-600 focus:ring-2 focus:ring-white">
+                        </div>
+                        <div>
+                            <label for="login-password" class="block text-sm font-medium text-white">رمز عبور</label>
+                            <input type="password" id="login-password" required class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 placeholder-gray-600 focus:ring-2 focus:ring-white">
+                        </div>
+                        <button type="submit" class="w-full bg-white text-teal-600 font-bold py-3 rounded-lg hover:bg-gray-100 transition duration-300 shadow-md">ورود</button>
+                        <p class="text-center text-sm text-white">
+                            حساب کاربری ندارید؟ <a href="#" id="show-signup" class="font-bold hover:underline">ثبت‌نام کنید</a>
+                        </p>
+                    </form>
+                </div>
 
-            <!-- Signup Form -->
-            <div id="signup-form-container" class="hidden">
-                <form id="signup-form" class="bg-white/20 backdrop-blur-lg p-8 rounded-2xl shadow-lg space-y-4">
-                    <h2 class="text-2xl font-bold text-white text-center">ایجاد حساب جدید</h2>
-                    <div>
-                        <label for="signup-fullname" class="block text-sm font-medium text-white">نام و نام خانوادگی</label>
-                        <input type="text" id="signup-fullname" required class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 placeholder-gray-600 focus:ring-2 focus:ring-white">
-                    </div>
-                    <div>
-                        <label for="signup-email" class="block text-sm font-medium text-white">ایمیل</label>
-                        <input type="email" id="signup-email" required class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 placeholder-gray-600 focus:ring-2 focus:ring-white">
-                    </div>
-                    <div>
-                        <label for="signup-password" class="block text-sm font-medium text-white">رمز عبور</label>
-                        <input type="password" id="signup-password" required class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 placeholder-gray-600 focus:ring-2 focus:ring-white">
-                    </div>
-                    <div>
-                        <label for="signup-role" class="block text-sm font-medium text-white">نقش شما</label>
-                        <select id="signup-role" class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 focus:ring-2 focus:ring-white">
-                            <option value="client">مراجع</option>
-                            <option value="therapist">روانشناس</option>
-                        </select>
-                    </div>
-                    <button type="submit" class="w-full bg-white text-teal-600 font-bold py-3 rounded-lg hover:bg-gray-100 transition duration-300 shadow-md">ثبت‌نام</button>
-                    <p class="text-center text-sm text-white">
-                        قبلا ثبت‌نام کرده‌اید؟ <a href="#" id="show-login" class="font-bold hover:underline">وارد شوید</a>
-                    </p>
-                </form>
+                <!-- Signup Form -->
+                <div id="signup-form-container" class="hidden">
+                    <form id="signup-form" class="bg-white/20 backdrop-blur-lg p-8 rounded-2xl shadow-lg space-y-4">
+                        <h2 class="text-2xl font-bold text-white text-center">ایجاد حساب جدید</h2>
+                        <div>
+                            <label for="signup-fullname" class="block text-sm font-medium text-white">نام و نام خانوادگی</label>
+                            <input type="text" id="signup-fullname" required class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 placeholder-gray-600 focus:ring-2 focus:ring-white">
+                        </div>
+                        <div>
+                            <label for="signup-email" class="block text-sm font-medium text-white">ایمیل</label>
+                            <input type="email" id="signup-email" required class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 placeholder-gray-600 focus:ring-2 focus:ring-white">
+                        </div>
+                        <div>
+                            <label for="signup-password" class="block text-sm font-medium text-white">رمز عبور</label>
+                            <input type="password" id="signup-password" required class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 placeholder-gray-600 focus:ring-2 focus:ring-white">
+                        </div>
+                        <div>
+                            <label for="signup-role" class="block text-sm font-medium text-white">نقش شما</label>
+                            <select id="signup-role" class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 focus:ring-2 focus:ring-white">
+                                <option value="client">مراجع</option>
+                                <option value="therapist">روانشناس</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="w-full bg-white text-teal-600 font-bold py-3 rounded-lg hover:bg-gray-100 transition duration-300 shadow-md">ثبت‌نام</button>
+                        <p class="text-center text-sm text-white">
+                            قبلا ثبت‌نام کرده‌اید؟ <a href="#" id="show-login" class="font-bold hover:underline">وارد شوید</a>
+                        </p>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
@@ -213,7 +235,7 @@
     // =================================================================
     const SUPABASE_URL = 'https://atrhsfozgnfhhbfxgsnu.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0cmhzZm96Z25maGhiZnhnc251Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4NjQ3MTYsImV4cCI6MjA2NjQ0MDcxNn0.eGODASElOsWJZ_cXmumZZwdQlcBGahm89n2UCuUxWk8';
-    const GEMINI_API_KEY = 'AIzaSyA1NgJyXJUK85SaZm8ZR4qp9EE64vWmoxE'; // Updated API Key
+    const GEMINI_API_KEY = 'YOUR_GEMINI_API_KEY'; // Please replace with your actual Gemini API key
     const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
     
     // =================================================================
@@ -225,10 +247,12 @@
     // Global state
     let currentUser = null;
     let userProfile = null;
-    let aiFeaturesEnabled = true; // Default state for AI features
+    let aiFeaturesEnabled = true;
     let chatSubscription = null;
-    let moodChartInstance = null; // To hold the chart instance
+    let moodChartInstance = null;
     let clientMoodChartInstance = null;
+    // [جدید] متغیر برای نگهداری تاریخ انتخابی
+    let selectedAppointmentTimestamp = null;
 
     // =================================================================
     // UTILITY & HELPER FUNCTIONS
@@ -237,7 +261,6 @@
     const showLoading = () => document.getElementById('loading-spinner').classList.remove('hidden');
     const hideLoading = () => document.getElementById('loading-spinner').classList.add('hidden');
 
-    // تابع برای نمایش مودال
     const showModal = (title, content, actions = []) => {
         const modalContainer = document.getElementById('modal-container');
         const modalHTML = `
@@ -254,15 +277,12 @@
         modalContainer.classList.add('visible');
     };
 
-    // تابع برای بستن مودال
     const closeModal = () => {
         const modalContainer = document.getElementById('modal-container');
         modalContainer.classList.remove('visible');
         modalContainer.innerHTML = '';
     };
-    window.closeModal = closeModal;
 
-    // تابع برای نمایش پیام (Toast)
     const showToast = (message, type = 'success') => {
         const toastColors = {
             success: 'bg-green-500',
@@ -278,16 +298,14 @@
         }, 3000);
     };
 
-    // تابع برای ناوبری بین صفحات
     const navigateTo = (pageId) => {
         document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
         const targetPage = document.getElementById(pageId);
         if (targetPage) {
             targetPage.classList.add('active');
-            targetPage.scrollTop = 0; // همیشه به بالای صفحه اسکرول کن
+            targetPage.scrollTop = 0;
         }
         
-        // آپدیت حالت فعال در نویگیشن
         const navId = `nav-${pageId.split('-')[1]}`;
         document.querySelectorAll('.nav-item').forEach(item => {
             item.classList.remove('text-teal-600');
@@ -299,7 +317,6 @@
             activeNavItem.classList.add('text-teal-600');
         }
     };
-    window.navigateTo = navigateTo;
 
     // =================================================================
     // AUTHENTICATION
@@ -327,19 +344,15 @@
         showLoading();
         const email = document.getElementById('login-email').value;
         const password = document.getElementById('login-password').value;
-
         const { error } = await db.auth.signInWithPassword({ email, password });
-
         if (error) {
             showToast(`خطا در ورود: ${error.message}`, 'error');
         } else {
             showToast('با موفقیت وارد شدید!', 'success');
-            // onAuthStateChange will handle the rest
         }
         hideLoading();
     });
 
-    // [اصلاح شد] منطق ثبت نام برای جلوگیری از خطا و ثبت صحیح نقش
     signupForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         showLoading();
@@ -348,14 +361,13 @@
         const fullName = document.getElementById('signup-fullname').value;
         const role = document.getElementById('signup-role').value;
 
-        // مرحله ۱: ثبت نام کاربر در سرویس Auth
         const { data, error } = await db.auth.signUp({
             email,
             password,
             options: {
                 data: {
-                    // این اطلاعات توسط تریگر در پایگاه داده برای ساخت پروفایل اولیه استفاده می‌شود
                     full_name: fullName,
+                    role: role // Pass role directly here
                 }
             }
         });
@@ -366,26 +378,11 @@
             return;
         }
 
-        // مرحله ۲: اگر کاربر با موفقیت ساخته شد، نقش او را در جدول پروفایل‌ها ثبت می‌کنیم
-        // این کار برای اطمینان از ثبت صحیح نقش انجام می‌شود، حتی اگر تریگر پایگاه داده آن را انجام ندهد
-        if (data.user) {
-            const { error: profileError } = await db
-                .from('profiles')
-                .update({ role: role })
-                .eq('id', data.user.id);
-
-            if (profileError) {
-                console.error("Error updating role after signup:", profileError);
-                // به کاربر اطلاع می‌دهیم که مشکلی در تنظیم نقش وجود داشته
-                showToast('ثبت‌نام انجام شد، اما در تنظیم نقش خطایی رخ داد.', 'error');
-            } else {
-                showToast('ثبت‌نام موفقیت‌آمیز بود. لطفاً ایمیل خود را برای تایید بررسی کنید.', 'info');
-            }
+        if (data.user && data.user.identities && data.user.identities.length === 0) {
+             showToast('این کاربر از قبل وجود دارد. لطفاً وارد شوید.', 'error');
         } else {
-             // حالتی که کاربر از قبل وجود دارد ولی تایید نشده
-             showToast('لطفاً ایمیل خود را برای تکمیل ثبت‌نام تایید کنید.', 'info');
+             showToast('ثبت‌نام موفقیت‌آمیز بود. لطفاً ایمیل خود را برای تایید بررسی کنید.', 'info');
         }
-
         hideLoading();
     });
 
@@ -400,7 +397,6 @@
         appContainer.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         hideLoading();
     };
-    window.handleLogout = handleLogout;
 
     // =================================================================
     // APP INITIALIZATION & ROUTING
@@ -410,7 +406,6 @@
         showLoading();
         if (session && session.user) {
             currentUser = session.user;
-            // تلاش برای دریافت پروفایل کاربر
             const { data, error } = await db
                 .from('profiles')
                 .select('*')
@@ -419,19 +414,6 @@
 
             if (data) {
                 userProfile = data;
-                // اگر نقش کاربر هنوز ثبت نشده (مثلا به خاطر تاخیر تریگر)، یک بار دیگر تلاش می‌کنیم
-                if (!userProfile.role) {
-                    console.warn("User role is null, attempting to re-fetch...");
-                    // یک تاخیر کوتاه برای اینکه مطمئن شویم تریگر پایگاه داده کارش را کرده
-                    await new Promise(resolve => setTimeout(resolve, 1500));
-                    const { data: refreshedProfile, error: refreshError } = await db
-                         .from('profiles')
-                         .select('*')
-                         .eq('id', currentUser.id)
-                         .single();
-                    if(refreshedProfile) userProfile = refreshedProfile;
-                }
-
                 authPage.classList.remove('active');
                 appContainer.classList.remove('hidden');
                 await setupUIForRole(userProfile.role);
@@ -451,9 +433,8 @@
 
     const setupUIForRole = async (role) => {
         const navBar = document.getElementById('bottom-nav-bar');
-        navBar.innerHTML = ''; // Clear previous navigation
+        navBar.innerHTML = '';
 
-        // اطمینان حاصل شود که رول معتبر است، در غیر این صورت به کاربر اطلاع داده شود
         if (!['client', 'therapist', 'admin'].includes(role)) {
             showToast(`نقش کاربری "${role || 'نامشخص'}" تعریف نشده است.`, 'error');
             console.error(`Invalid role detected: ${role}`);
@@ -520,6 +501,9 @@
         if (!aiFeaturesEnabled) {
             return "قابلیت هوش مصنوعی در حال حاضر غیرفعال است.";
         }
+        if (!GEMINI_API_KEY || GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY') {
+            return "کلید API برای سرویس هوش مصنوعی تنظیم نشده است. لطفاً با مدیر سیستم تماس بگیرید.";
+        }
         try {
             const response = await fetch(GEMINI_API_URL, {
                 method: 'POST',
@@ -551,7 +535,39 @@
     // --- CLIENT: DASHBOARD ---
     const renderClientDashboard = async () => {
         const page = document.getElementById('client-dashboard-page');
-        // [اصلاح شد] حذف کلاس main-content
+        
+        const { data: lastAppointment, error: lastAptError } = await db
+            .from('appointments')
+            .select('therapist:therapist_id ( id, full_name )')
+            .eq('client_id', currentUser.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+        let therapistCardHTML = '';
+        if (lastAppointment && lastAppointment.therapist) {
+            therapistCardHTML = `
+            <div class="bg-white p-4 rounded-2xl shadow-md flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-500">روانشناس شما</p>
+                    <p class="font-bold text-lg">دکتر ${lastAppointment.therapist.full_name}</p>
+                </div>
+                <button onclick="startChatWith('${lastAppointment.therapist.id}')" class="bg-teal-500 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2">
+                    <i data-lucide="message-circle"></i>
+                    <span>چت</span>
+                </button>
+            </div>
+            `;
+        } else {
+             therapistCardHTML = `
+            <div class="bg-white p-4 rounded-2xl shadow-md text-center">
+                 <p class="font-semibold mb-2">هنوز روانشناسی برای شما ثبت نشده است.</p>
+                 <p class="text-sm text-gray-600 mb-4">برای شروع گفتگو، ابتدا یک نوبت رزرو کنید.</p>
+                 <button onclick="navigateTo('client-appointments-page')" class="bg-teal-500 text-white px-6 py-2 rounded-lg font-semibold">رزرو نوبت</button>
+            </div>
+            `;
+        }
+
         page.innerHTML = `
             <div class="space-y-6">
                 <div class="flex justify-between items-center">
@@ -564,12 +580,12 @@
                     </button>
                 </div>
 
-                <!-- Mental Health Score Card -->
+                ${therapistCardHTML}
+
                 <div id="health-score-card" class="bg-white p-4 rounded-2xl shadow-md text-center">
                     <p class="text-gray-500">در حال محاسبه نمره سلامت روان شما...</p>
                 </div>
 
-                <!-- Mood Tracker Card -->
                 <div class="bg-white p-4 rounded-2xl shadow-md">
                     <h2 class="font-bold text-lg mb-3">ثبت حال امروز</h2>
                     <div class="flex justify-around items-center">
@@ -588,7 +604,6 @@
                     </div>
                 </div>
 
-                <!-- Mood Chart -->
                 <div class="bg-white p-4 rounded-2xl shadow-md">
                     <h2 class="font-bold text-lg mb-3">نمودار وضعیت روحی هفته</h2>
                     <div class="relative h-64">
@@ -596,14 +611,12 @@
                     </div>
                 </div>
                 
-                <!-- AI Helper Card -->
                 <div id="ai-helper-card" class="bg-gradient-to-r from-blue-500 to-cyan-400 p-4 rounded-2xl shadow-lg text-white">
                     <h2 class="font-bold text-lg mb-2">دستیار هوشمند ساینو</h2>
                     <p class="text-sm mb-4">نیاز به صحبت داری؟ دستیار هوشمند ما همیشه آماده کمک به توست.</p>
                     <button onclick="openAiChat()" class="bg-white/30 w-full py-2 rounded-lg font-semibold hover:bg-white/50 transition">شروع گفتگو</button>
                 </div>
 
-                <!-- Journaling Card -->
                 <div class="bg-white p-4 rounded-2xl shadow-md">
                     <h2 class="font-bold text-lg mb-2">یادداشت‌های روزانه</h2>
                     <p class="text-sm text-gray-500 mb-3">افکارت رو اینجا بنویس. این یک فضای کاملا شخصیه.</p>
@@ -672,10 +685,9 @@
         } else {
             showToast('حال شما با موفقیت ثبت شد!', 'success');
             await loadMoodChart();
-            await calculateAndDisplayHealthScore(); // Recalculate score after new entry
+            await calculateAndDisplayHealthScore();
         }
     };
-    window.submitMood = submitMood;
 
     const loadMoodChart = async () => {
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -698,7 +710,6 @@
         if (!canvasEl) return;
         const ctx = canvasEl.getContext('2d');
         
-        // Destroy the old chart instance if it exists
         if (moodChartInstance) {
             moodChartInstance.destroy();
         }
@@ -722,35 +733,17 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                elements: {
-                    line: {
-                        borderWidth: 3
-                    }
-                },
+                elements: { line: { borderWidth: 3 } },
                 scales: {
                     r: {
-                        angleLines: {
-                            display: false
-                        },
+                        angleLines: { display: false },
                         suggestedMin: 0,
                         suggestedMax: 5,
-                        pointLabels: {
-                            font: {
-                                family: "'Vazirmatn', sans-serif",
-                                size: 12
-                            }
-                        },
-                        ticks: {
-                           stepSize: 1,
-                           display: false
-                        }
+                        pointLabels: { font: { family: "'Vazirmatn', sans-serif", size: 12 } },
+                        ticks: { stepSize: 1, display: false }
                     }
                 },
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                }
+                plugins: { legend: { display: false } }
             }
         });
     };
@@ -771,7 +764,6 @@
             document.getElementById('journal-input').value = '';
         }
     };
-    window.submitJournal = submitJournal;
     
     const openAiChat = () => {
         const content = `
@@ -786,7 +778,6 @@
         showModal('گفتگو با دستیار هوشمند', content);
         lucide.createIcons();
     };
-    window.openAiChat = openAiChat;
 
     const sendAiChatMessage = async () => {
         const input = document.getElementById('ai-chat-input');
@@ -810,7 +801,6 @@
         history.innerHTML += `<div class="text-right my-1"><span class="bg-gray-200 text-gray-700 p-2 rounded-lg inline-block">${aiResponse}</span></div>`;
         history.scrollTop = history.scrollHeight;
     };
-    window.sendAiChatMessage = sendAiChatMessage;
 
     // --- CLIENT: TESTS ---
     const psychologicalTests = [
@@ -881,7 +871,13 @@
         questionsHTML += `<button onclick="submitTest('${testId}')" class="w-full bg-teal-500 text-white py-2 rounded-lg font-semibold">مشاهده نتیجه</button>`;
         testContainer.innerHTML = questionsHTML;
     };
-    window.startTest = startTest;
+
+    const resetTestsPage = () => {
+        document.getElementById('test-list').classList.remove('hidden');
+        const testContainer = document.getElementById('test-container');
+        testContainer.classList.add('hidden');
+        testContainer.innerHTML = '';
+    };
 
     const submitTest = async (testId) => {
         const test = psychologicalTests.find(t => t.id === testId);
@@ -922,10 +918,9 @@
             <h2 class="text-xl font-bold mb-4">نتیجه تست ${test.name}</h2>
             <p class="text-gray-700 mb-2">امتیاز شما: <span class="font-bold">${score}</span></p>
             <p class="text-gray-800 bg-gray-100 p-3 rounded-lg">${resultText}</p>
-            <button onclick="renderClientTests(); navigateTo('client-tests-page')" class="mt-4 w-full bg-gray-500 text-white py-2 rounded-lg">بازگشت به لیست تست‌ها</button>
+            <button onclick="resetTestsPage()" class="mt-4 w-full bg-gray-500 text-white py-2 rounded-lg">بازگشت به لیست تست‌ها</button>
         `;
     };
-    window.submitTest = submitTest;
 
     // --- CLIENT: APPOINTMENTS ---
     const renderClientAppointments = async () => {
@@ -940,7 +935,7 @@
                 <div class="mt-8">
                     <h2 class="text-xl font-bold text-gray-800 mb-4">رزرو نوبت جدید</h2>
                     <div id="therapist-booking-section" class="bg-white p-4 rounded-2xl shadow-md space-y-4">
-                         <p class="text-center text-gray-500">در حال بارگذاری لیست روانشناسان...</p>
+                        <p class="text-center text-gray-500">در حال بارگذاری لیست روانشناسان...</p>
                     </div>
                 </div>
             </div>
@@ -951,21 +946,18 @@
         lucide.createIcons();
     };
     
+    // [اصلاح شد] رفع خطای بارگذاری نوبت‌ها با حذف ستون ناموجود
     const loadClientAppointments = async () => {
         const listEl = document.getElementById('appointments-list');
         const { data, error } = await db
             .from('appointments')
-            .select(`
-                id,
-                appointment_time,
-                status,
-                therapist:therapist_id ( id, full_name )
-            `)
+            .select(`id, appointment_time, status, therapist:therapist_id ( id, full_name )`)
             .eq('client_id', currentUser.id)
             .order('appointment_time', { ascending: false });
 
         if (error) {
-            listEl.innerHTML = `<p class="text-red-500">خطا در بارگذاری نوبت‌ها.</p>`;
+            console.error("Error loading appointments:", error);
+            listEl.innerHTML = `<p class="text-red-500">خطا در بارگذاری نوبت‌ها. لطفاً دوباره امتحان کنید.</p>`;
             return;
         }
 
@@ -974,23 +966,29 @@
             return;
         }
 
-        listEl.innerHTML = data.map(apt => `
+        listEl.innerHTML = data.map(apt => {
+            if (!apt.therapist) {
+                return ''; 
+            }
+            return `
             <div class="bg-white p-4 rounded-2xl shadow-md">
                 <div class="flex justify-between items-start">
                     <div>
                         <p class="font-bold text-lg">دکتر ${apt.therapist.full_name}</p>
-                        <p class="text-sm text-gray-600">${new persianDate(new Date(apt.appointment_time)).format('dddd D MMMM YYYY - ساعت HH:mm')}</p>
+                        <p class="text-sm text-gray-600">${new persianDate(new Date(apt.appointment_time)).format('dddd D MMMM - ساعت HH:mm')}</p>
+                        <p class="text-xs font-semibold text-teal-700 mt-1">جلسه حضوری</p>
                     </div>
-                    <span class="text-sm font-semibold px-3 py-1 rounded-full ${apt.status === 'booked' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}">${apt.status === 'booked' ? 'رزرو شده' : apt.status}</span>
+                    <span class="text-sm font-semibold px-3 py-1 rounded-full ${apt.status === 'booked' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}">${apt.status === 'booked' ? 'رزرو شده' : 'لغو شده'}</span>
                 </div>
                 <div class="mt-4 flex gap-2">
-                    <button onclick="startChatWith('${apt.therapist.id}')" class="flex-1 bg-teal-500 text-white py-2 rounded-lg text-sm">شروع چت</button>
+                    <button onclick="startChatWith('${apt.therapist.id}')" class="flex-1 bg-teal-500 text-white py-2 rounded-lg text-sm">ارتباط با روانشناس</button>
                     ${apt.status === 'booked' ? `<button onclick="cancelAppointment(${apt.id})" class="flex-1 bg-red-100 text-red-700 py-2 rounded-lg text-sm">لغو نوبت</button>` : ''}
                 </div>
             </div>
-        `).join('');
+        `}).join('');
     };
     
+    // [اصلاح شد] بازگرداندن تقویم فارسی با پیاده‌سازی صحیح
     const loadTherapistsForBooking = async () => {
         const sectionEl = document.getElementById('therapist-booking-section');
         const { data, error } = await db.from('profiles').select('id, full_name').eq('role', 'therapist');
@@ -1009,32 +1007,40 @@
             </div>
             <div>
                 <label for="appointment-date" class="block text-sm font-medium text-gray-700">انتخاب تاریخ و ساعت</label>
-                <input type="text" id="appointment-date" class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm" placeholder="تاریخ را انتخاب کنید">
+                <input type="text" id="appointment-date" readonly class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm bg-white cursor-pointer" placeholder="برای انتخاب تاریخ کلیک کنید">
+                <p class="text-xs text-gray-500 mt-1">توجه: تمام نوبت‌ها برای مراجعه حضوری هستند.</p>
             </div>
             <button onclick="bookAppointment()" class="w-full bg-teal-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-600 transition">رزرو نهایی</button>
         `;
         
+        // [اصلاح شد] پیاده‌سازی صحیح تقویم فارسی با onSelect
         $('#appointment-date').persianDatepicker({
             format: 'YYYY/MM/DD HH:mm',
-            timePicker: {
-                enabled: true
-            },
-            minDate: new persianDate()
+            timePicker: { enabled: true },
+            minDate: new persianDate(),
+            observer: true,
+            autoClose: true,
+            onSelect: function(unix) {
+                // [جدید] ذخیره تاریخ انتخابی در متغیر
+                selectedAppointmentTimestamp = unix;
+            }
         });
     };
 
+    // [اصلاح شد] رفع کامل خطای تاریخ و رزرو
     const bookAppointment = async () => {
         const therapistId = document.getElementById('therapist-select').value;
-        const datePickerVal = $('#appointment-date').val();
         
-        if (!datePickerVal) {
+        // [اصلاح شد] خواندن تاریخ از متغیر به جای اتریبیوت
+        if (!selectedAppointmentTimestamp) {
             showToast('لطفاً تاریخ و ساعت را انتخاب کنید.', 'error');
             return;
         }
         
-        const appointmentTime = new persianDate.parse(datePickerVal, 'YYYY/MM/DD HH:mm').toDate().toISOString();
+        const appointmentTime = new Date(selectedAppointmentTimestamp).toISOString();
         
         showLoading();
+        // [اصلاح شد] حذف ستون ناموجود از کوئری
         const { error } = await db.from('appointments').insert({
             client_id: currentUser.id,
             therapist_id: therapistId,
@@ -1043,14 +1049,19 @@
         hideLoading();
 
         if (error) {
-            showToast('این زمان قبلا رزرو شده است. لطفاً زمان دیگری را انتخاب کنید.', 'error');
-            console.error(error);
+            if (error.code === '23505') { 
+                 showToast('این زمان قبلا رزرو شده است. لطفاً زمان دیگری را انتخاب کنید.', 'error');
+            } else {
+                 showToast('خطا در رزرو نوبت. لطفاً دوباره تلاش کنید.', 'error');
+            }
+            console.error("Booking Error:", error);
         } else {
             showToast('نوبت شما با موفقیت رزرو شد.', 'success');
+            selectedAppointmentTimestamp = null; // ریست کردن تاریخ انتخابی
             await renderClientAppointments();
+            await renderClientDashboard(); // رفرش داشبورد برای نمایش کارت چت
         }
     };
-    window.bookAppointment = bookAppointment;
     
     const cancelAppointment = async (id) => {
         showLoading();
@@ -1063,7 +1074,6 @@
             await loadClientAppointments();
         }
     };
-    window.cancelAppointment = cancelAppointment;
 
     // --- CLIENT: PROFILE ---
     const renderClientProfile = async () => {
@@ -1075,23 +1085,28 @@
                         ${userProfile.full_name.charAt(0)}
                     </div>
                     <h1 class="text-2xl font-bold">${userProfile.full_name}</h1>
-                    <p class="text-gray-500">${userProfile.email}</p>
+                    <p class="text-gray-500">${currentUser.email}</p>
                 </div>
                 
                 <div class="bg-white p-4 rounded-2xl shadow-md space-y-4">
-                    <h2 class="text-lg font-bold">تنظیمات حساب</h2>
-                    <div class="flex justify-between items-center">
-                        <label for="fullname-input">نام کامل</label>
-                        <input id="fullname-input" type="text" class="border-b-2 text-left" value="${userProfile.full_name}">
+                    <h2 class="text-lg font-bold">ویرایش پروفایل</h2>
+                    <div class="space-y-2">
+                        <label for="fullname-input" class="block text-sm font-medium text-gray-700">نام کامل</label>
+                        <input id="fullname-input" type="text" class="w-full p-2 border rounded-lg" value="${userProfile.full_name || ''}">
                     </div>
-                     <button onclick="updateProfile()" class="w-full bg-teal-500 text-white py-2 rounded-lg font-semibold">ذخیره تغییرات</button>
+                    <div class="space-y-2">
+                        <label for="bio-input" class="block text-sm font-medium text-gray-700">بیوگرافی (اختیاری)</label>
+                        <textarea id="bio-input" class="w-full h-24 p-2 border rounded-lg" placeholder="کمی درباره خودتان بنویسید...">${userProfile.bio || ''}</textarea>
+                    </div>
+                    <button onclick="updateClientProfile()" class="w-full bg-teal-500 text-white py-2 rounded-lg font-semibold">ذخیره تغییرات</button>
                 </div>
 
-                <div class="bg-white p-4 rounded-2xl shadow-md space-y-4">
-                    <h2 class="text-lg font-bold">سایر گزینه‌ها</h2>
-                    <button class="w-full text-left p-2 hover:bg-gray-100 rounded-lg">سوابق تست‌ها</button>
-                    <button class="w-full text-left p-2 hover:bg-gray-100 rounded-lg">یادداشت‌های من</button>
-                    <button class="w-full text-left p-2 hover:bg-gray-100 rounded-lg">پشتیبانی</button>
+                <div class="bg-white p-4 rounded-2xl shadow-md space-y-2">
+                    <h2 class="text-lg font-bold">سوابق</h2>
+                    <button onclick="viewTestHistory()" class="w-full text-right flex justify-between items-center p-2 hover:bg-gray-100 rounded-lg">
+                        <span>سوابق تست‌ها</span>
+                        <i data-lucide="chevron-left"></i>
+                    </button>
                 </div>
 
                 <button onclick="handleLogout()" class="w-full bg-red-500 text-white font-bold py-3 rounded-lg hover:bg-red-600 transition">خروج از حساب</button>
@@ -1100,23 +1115,57 @@
         lucide.createIcons();
     };
     
-    const updateProfile = async () => {
+    const updateClientProfile = async () => {
         const newName = document.getElementById('fullname-input').value;
-        if (newName === userProfile.full_name) return;
+        const newBio = document.getElementById('bio-input').value;
         
         showLoading();
-        const { error } = await db.from('profiles').update({ full_name: newName }).eq('id', currentUser.id);
+        const { data, error } = await db.from('profiles').update({ 
+            full_name: newName,
+            bio: newBio
+        }).eq('id', currentUser.id).select().single();
         hideLoading();
         
         if (error) {
             showToast('خطا در به‌روزرسانی پروفایل.', 'error');
         } else {
-            userProfile.full_name = newName;
+            userProfile = data; // Update local profile object
             showToast('پروفایل با موفقیت به‌روزرسانی شد.', 'success');
-            await renderClientProfile(); // Re-render to show changes
+            await renderClientProfile();
         }
     };
-    window.updateProfile = updateProfile;
+    
+    const viewTestHistory = async () => {
+        showLoading();
+        const { data, error } = await db.from('test_results')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .order('created_at', { ascending: false });
+        hideLoading();
+
+        if (error) {
+            showToast('خطا در دریافت تاریخچه تست‌ها', 'error');
+            return;
+        }
+
+        let content = '<p class="text-center text-gray-500">هیچ نتیجه‌ای یافت نشد.</p>';
+
+        if (data && data.length > 0) {
+            content = `
+                <div class="space-y-4">
+                ${data.map(test => `
+                    <div class="p-3 bg-gray-50 rounded-lg border">
+                        <p class="font-bold">${test.test_name}</p>
+                        <p class="text-sm text-gray-500 mb-2">${new persianDate(new Date(test.created_at)).format('L')}</p>
+                        <p class="text-sm"><strong>امتیاز: ${test.score}</strong> - ${test.result_text}</p>
+                    </div>
+                `).join('')}
+                </div>
+            `;
+        }
+        
+        showModal('تاریخچه نتایج تست‌ها', content);
+    };
 
     // =================================================================
     // THERAPIST-SIDE RENDERING & LOGIC
@@ -1131,11 +1180,12 @@
             .select('id, appointment_time, client:client_id(id, full_name)')
             .eq('therapist_id', currentUser.id)
             .eq('status', 'booked')
+            .gte('appointment_time', new Date().toISOString())
             .order('appointment_time', { ascending: true })
             .limit(5);
 
         const { count: clientCount, error: clientError } = await db
-            .from('appointments')
+            .from('therapist_clients_view') // Using a view for distinct clients
             .select('client_id', { count: 'exact', head: true })
             .eq('therapist_id', currentUser.id);
             
@@ -1143,7 +1193,7 @@
 
         page.innerHTML = `
             <div class="space-y-6">
-                <h1 class="text-2xl font-bold text-gray-800">داشبورد دکتر ${userProfile.full_name.split(' ')[1] || userProfile.full_name}</h1>
+                <h1 class="text-2xl font-bold text-gray-800">داشبورد دکتر ${userProfile.full_name.split(' ').slice(1).join(' ') || userProfile.full_name}</h1>
                 
                 <div class="grid grid-cols-2 gap-4">
                     <div class="bg-white p-4 rounded-2xl shadow-md text-center">
@@ -1180,24 +1230,11 @@
     const renderTherapistClients = async () => {
         const page = document.getElementById('therapist-clients-page');
         showLoading();
-        // This query should find all unique clients who have booked an appointment with this therapist
-        const { data: clientAppointments, error } = await db
-            .from('appointments')
-            .select('client:client_id (id, full_name, email)')
+        const { data: clients, error } = await db
+            .from('therapist_clients_view')
+            .select('client_id, client_full_name, client_email')
             .eq('therapist_id', currentUser.id);
-        
         hideLoading();
-
-        let clients = [];
-        if (clientAppointments) {
-            const clientMap = new Map();
-            clientAppointments.forEach(apt => {
-                if (apt.client) {
-                    clientMap.set(apt.client.id, apt.client);
-                }
-            });
-            clients = Array.from(clientMap.values());
-        }
 
         page.innerHTML = `
             <div>
@@ -1207,12 +1244,12 @@
                     ${clients && clients.length > 0 ? clients.map(client => `
                         <div class="bg-white p-4 rounded-2xl shadow-md flex justify-between items-center">
                             <div>
-                                <p class="font-bold">${client.full_name}</p>
-                                <p class="text-sm text-gray-500">${client.email}</p>
+                                <p class="font-bold">${client.client_full_name}</p>
+                                <p class="text-sm text-gray-500">${client.client_email}</p>
                             </div>
                             <div class="flex gap-2">
-                                <button onclick="viewClientDetails('${client.id}')" class="p-2 bg-gray-100 rounded-lg text-gray-600"><i data-lucide="eye"></i></button>
-                                <button onclick="startChatWith('${client.id}')" class="p-2 bg-teal-100 rounded-lg text-teal-600"><i data-lucide="message-square"></i></button>
+                                <button onclick="viewClientDetails('${client.client_id}')" class="p-2 bg-gray-100 rounded-lg text-gray-600"><i data-lucide="eye"></i></button>
+                                <button onclick="startChatWith('${client.client_id}')" class="p-2 bg-teal-100 rounded-lg text-teal-600"><i data-lucide="message-square"></i></button>
                             </div>
                         </div>
                     `).join('') : '<p class="text-center text-gray-500">شما هیچ مراجعه‌کننده‌ای ندارید.</p>'}
@@ -1224,7 +1261,7 @@
 
     const viewClientDetails = async (clientId) => {
         showLoading();
-        const { data: profile, error: pError } = await db.from('profiles').select('full_name').eq('id', clientId).single();
+        const { data: profile, error: pError } = await db.from('profiles').select('full_name, bio').eq('id', clientId).single();
         const { data: moods, error: mError } = await db.from('mood_entries').select('mood_score, created_at').eq('user_id', clientId).order('created_at', {ascending: false}).limit(7);
         const { data: tests, error: tError } = await db.from('test_results').select('*').eq('user_id', clientId).order('created_at', {ascending: false}).limit(5);
         hideLoading();
@@ -1235,9 +1272,10 @@
             content += `<p class="text-red-500">خطا در دریافت اطلاعات مراجع.</p>`;
         } else {
             content += `
+                ${profile.bio ? `<div><h4 class="font-bold text-md mb-2">بیوگرافی مراجع</h4><p class="text-sm bg-gray-100 p-2 rounded-lg">${profile.bio}</p></div>` : ''}
                 <div>
                     <h4 class="font-bold text-md mb-2">نمودار وضعیت روحی اخیر</h4>
-                    ${mError ? '<p class="text-red-500">خطا</p>' : moods.length > 0 ? `<canvas id="clientMoodChart"></canvas>` : '<p>داده‌ای برای نمایش وجود ندارد.</p>'}
+                    ${mError ? '<p class="text-red-500">خطا</p>' : moods.length > 0 ? `<div class="h-48"><canvas id="clientMoodChart"></canvas></div>` : '<p class="text-sm text-gray-500">داده‌ای برای نمایش وجود ندارد.</p>'}
                 </div>
                 <div>
                     <h4 class="font-bold text-md mb-2">آخرین نتایج تست‌ها</h4>
@@ -1245,7 +1283,7 @@
                         <ul class="list-disc pr-5 space-y-2 text-sm">
                             ${tests.map(t => `<li><strong>${t.test_name}:</strong> ${t.result_text} (امتیاز: ${t.score})</li>`).join('')}
                         </ul>
-                    ` : '<p>نتیجه تستی ثبت نشده است.</p>'}
+                    ` : '<p class="text-sm text-gray-500">نتیجه تستی ثبت نشده است.</p>'}
                 </div>
             `;
         }
@@ -1258,9 +1296,7 @@
             const scores = moods.map(d => d.mood_score).reverse();
             const ctx = document.getElementById('clientMoodChart').getContext('2d');
             
-            if (clientMoodChartInstance) {
-                clientMoodChartInstance.destroy();
-            }
+            if (clientMoodChartInstance) clientMoodChartInstance.destroy();
 
             clientMoodChartInstance = new Chart(ctx, { 
                 type: 'bar', 
@@ -1277,18 +1313,19 @@
                 }, 
                 options: { 
                     responsive: true, 
+                    maintainAspectRatio: false,
                     scales: { y: { beginAtZero: true, max: 5 } },
                     plugins: { legend: { display: false } }
                 } 
             });
         }
     };
-    window.viewClientDetails = viewClientDetails;
 
     // --- THERAPIST: SCHEDULE ---
     const renderTherapistSchedule = async () => {
         const page = document.getElementById('therapist-schedule-page');
         showLoading();
+        // [اصلاح شد] حذف ستون ناموجود از کوئری
         const { data, error } = await db
             .from('appointments')
             .select('id, appointment_time, status, client:client_id(full_name)')
@@ -1305,10 +1342,11 @@
                         <div class="bg-white p-4 rounded-2xl shadow-md">
                             <div class="flex justify-between items-start">
                                 <div>
-                                    <p class="font-bold text-lg">${apt.client.full_name}</p>
-                                    <p class="text-sm text-gray-600">${new persianDate(new Date(apt.appointment_time)).format('dddd D MMMM YYYY - ساعت HH:mm')}</p>
+                                    <p class="font-bold text-lg">${apt.client ? apt.client.full_name : 'مراجع حذف شده'}</p>
+                                    <p class="text-sm text-gray-600">${new persianDate(new Date(apt.appointment_time)).format('dddd D MMMM - ساعت HH:mm')}</p>
+                                    <p class="text-xs font-semibold text-teal-700 mt-1">جلسه حضوری</p>
                                 </div>
-                                <span class="text-sm font-semibold px-3 py-1 rounded-full ${apt.status === 'booked' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}">${apt.status}</span>
+                                <span class="text-sm font-semibold px-3 py-1 rounded-full ${apt.status === 'booked' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}">${apt.status === 'booked' ? 'رزرو شده' : 'لغو شده'}</span>
                             </div>
                         </div>
                     `).join('') : '<p class="text-center text-gray-500">هیچ نوبتی در برنامه شما ثبت نشده است.</p>'}
@@ -1320,25 +1358,66 @@
     // --- THERAPIST: PROFILE ---
     const renderTherapistProfile = async () => {
         const page = document.getElementById('therapist-profile-page');
-         page.innerHTML = `
+        page.innerHTML = `
             <div class="space-y-6">
                 <div class="flex flex-col items-center space-y-2">
                     <div class="w-24 h-24 rounded-full bg-blue-500 text-white flex items-center justify-center text-4xl font-bold">
                         ${userProfile.full_name.charAt(0)}
                     </div>
                     <h1 class="text-2xl font-bold">دکتر ${userProfile.full_name}</h1>
-                    <p class="text-gray-500">${userProfile.email}</p>
+                    <p class="text-gray-500">${currentUser.email}</p>
                 </div>
                 
                 <div class="bg-white p-4 rounded-2xl shadow-md space-y-4">
-                    <h2 class="text-lg font-bold">تنظیمات</h2>
-                    <p>در این بخش می‌توانید تنظیمات مربوط به ساعات کاری و پروفایل خود را مدیریت کنید (این بخش در نسخه‌های بعدی تکمیل خواهد شد).</p>
+                    <h2 class="text-lg font-bold">ویرایش پروفایل تخصصی</h2>
+                    <div class="space-y-2">
+                        <label for="therapist-fullname-input" class="block text-sm font-medium text-gray-700">نام کامل</label>
+                        <input id="therapist-fullname-input" type="text" class="w-full p-2 border rounded-lg" value="${userProfile.full_name || ''}">
+                    </div>
+                     <div class="space-y-2">
+                        <label for="therapist-specialization-input" class="block text-sm font-medium text-gray-700">تخصص‌ها</label>
+                        <input id="therapist-specialization-input" type="text" class="w-full p-2 border rounded-lg" placeholder="مثال: CBT, روانکاوی" value="${userProfile.specialization || ''}">
+                    </div>
+                     <div class="space-y-2">
+                        <label for="therapist-experience-input" class="block text-sm font-medium text-gray-700">سال‌های تجربه</label>
+                        <input id="therapist-experience-input" type="number" class="w-full p-2 border rounded-lg" placeholder="مثال: 5" value="${userProfile.experience_years || ''}">
+                    </div>
+                    <div class="space-y-2">
+                        <label for="therapist-bio-input" class="block text-sm font-medium text-gray-700">بیوگرافی تخصصی</label>
+                        <textarea id="therapist-bio-input" class="w-full h-24 p-2 border rounded-lg" placeholder="درباره سوابق و رویکرد درمانی خود بنویسید...">${userProfile.bio || ''}</textarea>
+                    </div>
+                    <button onclick="updateTherapistProfile()" class="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold">ذخیره تغییرات</button>
                 </div>
 
                 <button onclick="handleLogout()" class="w-full bg-red-500 text-white font-bold py-3 rounded-lg hover:bg-red-600 transition">خروج از حساب</button>
             </div>
         `;
         lucide.createIcons();
+    };
+
+    const updateTherapistProfile = async () => {
+        const newName = document.getElementById('therapist-fullname-input').value;
+        const newBio = document.getElementById('therapist-bio-input').value;
+        const newSpec = document.getElementById('therapist-specialization-input').value;
+        const newExp = document.getElementById('therapist-experience-input').value;
+
+        showLoading();
+        const { data, error } = await db.from('profiles').update({ 
+            full_name: newName,
+            bio: newBio,
+            specialization: newSpec,
+            experience_years: newExp ? parseInt(newExp) : null
+        }).eq('id', currentUser.id).select().single();
+        hideLoading();
+        
+        if (error) {
+            showToast('خطا در به‌روزرسانی پروفایل.', 'error');
+            console.error(error);
+        } else {
+            userProfile = data;
+            showToast('پروفایل با موفقیت به‌روزرسانی شد.', 'success');
+            await renderTherapistProfile();
+        }
     };
 
     // =================================================================
@@ -1357,18 +1436,17 @@
                 <button onclick="goBackFromChat()" class="text-gray-600"><i data-lucide="arrow-right"></i></button>
                 <h1 class="font-bold text-lg">${otherUser.full_name}</h1>
             </header>
-            <div id="chat-messages" class="flex-grow pt-20 pb-20 space-y-4">
+            <div id="chat-messages" class="flex-grow pt-20 pb-20 space-y-4 px-4">
                 <!-- Messages will be loaded here -->
             </div>
-            <footer class="bg-white p-2 flex items-center gap-2 fixed bottom-0 right-0 left-0 border-t">
+            <footer class="bg-white p-2 flex items-center gap-2 fixed bottom-16 sm:bottom-0 right-0 left-0 border-t">
                 <input id="chat-input" type="text" class="flex-grow bg-gray-100 rounded-full py-2 px-4 focus:outline-none" placeholder="پیام خود را بنویسید...">
-                <button id="send-chat-btn" class="bg-teal-500 text-white w-10 h-10 rounded-full flex items-center justify-center">
+                <button id="send-chat-btn" class="bg-teal-500 text-white w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0">
                     <i data-lucide="send"></i>
                 </button>
             </footer>
         `;
         lucide.createIcons();
-        // برای صفحه چت، پدینگ پیش‌فرض را حذف می‌کنیم تا بتوانیم هدر و فوتر ثابت داشته باشیم
         page.style.padding = '0';
         navigateTo('chat-page');
 
@@ -1376,6 +1454,19 @@
         const sendBtn = document.getElementById('send-chat-btn');
         const chatInput = document.getElementById('chat-input');
         
+        const renderMessage = (msg) => {
+            const isMe = msg.sender_id === currentUser.id;
+            const time = new Date(msg.created_at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+            return `
+                <div class="flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}">
+                    <div class="max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${isMe ? 'bg-teal-500 text-white rounded-br-lg' : 'bg-gray-200 text-gray-800 rounded-bl-lg'}">
+                        <p>${msg.message_text}</p>
+                        <p class="text-xs mt-1 ${isMe ? 'text-white/70' : 'text-gray-500'} text-left">${time}</p>
+                    </div>
+                </div>
+            `;
+        };
+
         const loadMessages = async () => {
             const { data: messages, error } = await db.from('chat_messages')
                 .select('*')
@@ -1384,13 +1475,7 @@
                 .order('created_at', { ascending: true });
             
             if(messages) {
-                messageContainer.innerHTML = messages.map(msg => `
-                    <div class="flex px-4 ${msg.sender_id === currentUser.id ? 'justify-end' : 'justify-start'}">
-                        <div class="max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${msg.sender_id === currentUser.id ? 'bg-teal-500 text-white' : 'bg-gray-200 text-gray-800'}">
-                            ${msg.message_text}
-                        </div>
-                    </div>
-                `).join('');
+                messageContainer.innerHTML = messages.map(renderMessage).join('');
                 messageContainer.scrollTop = messageContainer.scrollHeight;
             }
         };
@@ -1411,14 +1496,10 @@
 
         sendBtn.onclick = handleSendMessage;
         chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                handleSendMessage();
-            }
+            if (e.key === 'Enter') handleSendMessage();
         });
 
-        if (chatSubscription) {
-            chatSubscription.unsubscribe();
-        }
+        if (chatSubscription) chatSubscription.unsubscribe();
 
         chatSubscription = db.channel('public:chat_messages')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, 
@@ -1426,36 +1507,26 @@
                 const newMessage = payload.new;
                 if ((newMessage.sender_id === currentUser.id && newMessage.receiver_id === otherUserId) || 
                     (newMessage.sender_id === otherUserId && newMessage.receiver_id === currentUser.id)) {
-                    messageContainer.innerHTML += `
-                        <div class="flex px-4 ${newMessage.sender_id === currentUser.id ? 'justify-end' : 'justify-start'}">
-                            <div class="max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${newMessage.sender_id === currentUser.id ? 'bg-teal-500 text-white' : 'bg-gray-200 text-gray-800'}">
-                                ${newMessage.message_text}
-                            </div>
-                        </div>
-                    `;
+                    messageContainer.innerHTML += renderMessage(newMessage);
                     messageContainer.scrollTop = messageContainer.scrollHeight;
                 }
             })
             .subscribe();
     };
-    window.startChatWith = startChatWith;
 
     const goBackFromChat = () => {
         if (chatSubscription) {
             chatSubscription.unsubscribe();
             chatSubscription = null;
         }
-        // بازگرداندن پدینگ به حالت عادی برای صفحات دیگر
         document.querySelectorAll('.page').forEach(p => p.style.padding = '');
 
-        // بازگشت به صفحه قبلی بر اساس نقش کاربر
         if (userProfile.role === 'client') {
-            navigateTo('client-appointments-page');
+            navigateTo('client-dashboard-page');
         } else {
             navigateTo('therapist-clients-page');
         }
     };
-    window.goBackFromChat = goBackFromChat;
 
 
     // =================================================================
@@ -1491,7 +1562,6 @@
         document.getElementById('ai-toggle').addEventListener('change', (e) => {
             aiFeaturesEnabled = e.target.checked;
             showToast(`ویژگی‌های هوش مصنوعی ${aiFeaturesEnabled ? 'فعال' : 'غیرفعال'} شد.`, 'info');
-            // In a real app, this value should be persisted in the database.
         });
 
         await loadAllUsersForAdmin();
@@ -1516,9 +1586,28 @@
         `).join('');
     };
 
+    // =================================================================
+    // GLOBALLY ACCESSIBLE FUNCTIONS
+    // =================================================================
+    window.navigateTo = navigateTo;
+    window.closeModal = closeModal;
+    window.handleLogout = handleLogout;
+    window.submitMood = submitMood;
+    window.submitJournal = submitJournal;
+    window.openAiChat = openAiChat;
+    window.sendAiChatMessage = sendAiChatMessage;
+    window.startTest = startTest;
+    window.submitTest = submitTest;
+    window.resetTestsPage = resetTestsPage;
+    window.bookAppointment = bookAppointment;
+    window.cancelAppointment = cancelAppointment;
+    window.updateClientProfile = updateClientProfile;
+    window.updateTherapistProfile = updateTherapistProfile;
+    window.viewClientDetails = viewClientDetails;
+    window.startChatWith = startChatWith;
+    window.goBackFromChat = goBackFromChat;
+    window.viewTestHistory = viewTestHistory;
 
-    // Initial Load
-    // showLoading(); // onAuthStateChange will handle loading
 </script>
 </body>
 </html>
