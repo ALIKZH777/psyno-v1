@@ -54,11 +54,10 @@
             animation: slideIn 0.3s ease-out forwards;
         }
         
-        /* [اصلاح شد] استایل برای صفحه چت با چیدمان flex */
         .page.active.flex-layout {
             display: flex;
             flex-direction: column;
-            height: 100%; /* اطمینان از ارتفاع کامل */
+            height: 100%; 
         }
 
         .bottom-nav {
@@ -71,7 +70,6 @@
             transition: transform 0.3s ease-in-out;
         }
         
-        /* [جدید] کلاس برای مخفی کردن منو */
         .bottom-nav.hidden {
             transform: translateY(100%);
         }
@@ -106,12 +104,10 @@
             overflow-y: auto;
         }
         
-        /* استایل برای تقویم فارسی */
         .pdp-group {
             direction: ltr;
         }
 
-        /* انیمیشن لودینگ زیبا */
         #loading-spinner .loader {
             width: 50px;
             height: 50px;
@@ -141,19 +137,12 @@
 </head>
 <body class="bg-gray-100">
 
-    <!-- انیمیشن لودینگ جدید -->
     <div id="loading-spinner" class="fixed inset-0 bg-white/80 z-50 flex items-center justify-center backdrop-blur-sm hidden">
         <div class="loader"></div>
     </div>
 
-    <!-- =================================================================
-         MODAL CONTAINER
-    ================================================================== -->
     <div id="modal-container" class="modal-backdrop"></div>
 
-    <!-- =================================================================
-         AUTH PAGES (Login / Signup)
-    ================================================================== -->
     <div id="auth-page" class="page active bg-gradient-to-br from-teal-400 to-blue-500">
         <div class="w-full h-full flex items-center justify-center">
             <div class="w-full max-w-md m-auto p-8">
@@ -162,7 +151,6 @@
                     <p class="text-white/80 mt-2">دستیار هوشمند سلامت روان شما</p>
                 </div>
                 
-                <!-- Login Form -->
                 <div id="login-form-container">
                     <form id="login-form" class="bg-white/20 backdrop-blur-lg p-8 rounded-2xl shadow-lg space-y-6">
                         <h2 class="text-2xl font-bold text-white text-center">ورود به حساب کاربری</h2>
@@ -181,7 +169,6 @@
                     </form>
                 </div>
 
-                <!-- Signup Form -->
                 <div id="signup-form-container" class="hidden">
                     <form id="signup-form" class="bg-white/20 backdrop-blur-lg p-8 rounded-2xl shadow-lg space-y-4">
                         <h2 class="text-2xl font-bold text-white text-center">ایجاد حساب جدید</h2>
@@ -214,9 +201,6 @@
         </div>
     </div>
 
-    <!-- =================================================================
-         MAIN APP CONTAINER (Client, Therapist, Admin)
-    ================================================================== -->
     <div id="app-container" class="hidden">
         <!-- Client Pages -->
         <div id="client-dashboard-page" class="page"></div>
@@ -236,9 +220,7 @@
         <!-- Admin Page -->
         <div id="admin-dashboard-page" class="page"></div>
         
-        <!-- Bottom Navigation Bar -->
         <div id="bottom-nav-bar" class="bottom-nav bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-            <!-- Navigation will be injected here by JS -->
         </div>
     </div>
 
@@ -248,7 +230,7 @@
     // =================================================================
     const SUPABASE_URL = 'https://atrhsfozgnfhhbfxgsnu.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0cmhzZm96Z25maGhiZnhnc251Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4NjQ3MTYsImV4cCI6MjA2NjQ0MDcxNn0.eGODASElOsWJZ_cXmumZZwdQlcBGahm89n2UCuUxWk8';
-    const GEMINI_API_KEY = 'AIzaSyA9-7HkBuizbyS4a2ZBnTmq9jXGj_WEOuo'; // Please replace with your actual Gemini API key
+    const GEMINI_API_KEY = 'YOUR_GEMINI_API_KEY'; 
     const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
     
     // =================================================================
@@ -257,7 +239,6 @@
     const { createClient } = supabase;
     const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     
-    // Global state
     let currentUser = null;
     let userProfile = null;
     let aiFeaturesEnabled = true;
@@ -311,7 +292,6 @@
         }, 3000);
     };
 
-    // [اصلاح شد] منطق ناوبری برای مخفی کردن منو در صفحه چت
     const navigateTo = (pageId) => {
         const activePage = document.querySelector('.page.active');
         const navBar = document.getElementById('bottom-nav-bar');
@@ -378,7 +358,6 @@
             hideLoading();
         } else {
             showToast('با موفقیت وارد شدید!', 'success');
-            // onAuthStateChange will handle hiding the loader
         }
     });
 
@@ -429,32 +408,43 @@
     // APP INITIALIZATION & ROUTING
     // =================================================================
 
+    // [اصلاح شد] بخش مدیریت ورود کاربر برای جلوگیری از رفرش شدن صفحه
     db.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'TOKEN_REFRESHED') {
-            return; 
-        }
-
-        if (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && session)) {
-            if (currentUser && currentUser.id === session.user.id) {
-                return; // User is already logged in and processed
+        try {
+            if (event === 'TOKEN_REFRESHED') {
+                return; 
             }
-            showLoading();
-            currentUser = session.user;
-            const { data, error } = await db.from('profiles').select('*').eq('id', currentUser.id).single();
 
-            if (data) {
-                userProfile = data;
-                authPage.classList.remove('active');
-                appContainer.classList.remove('hidden');
-                await setupUIForRole(userProfile.role);
-            } else {
-                console.error("Profile not found for user.", error);
-                showToast('پروفایل شما یافت نشد، لطفاً دوباره وارد شوید.', 'error');
+            if (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && session)) {
+                if (currentUser && currentUser.id === session.user.id) {
+                    return; 
+                }
+                showLoading();
+                currentUser = session.user;
+                const { data, error } = await db.from('profiles').select('*').eq('id', currentUser.id).single();
+
+                if (error && !data) {
+                    throw new Error(`پروفایل یافت نشد: ${error.message}`);
+                }
+
+                if (data) {
+                    userProfile = data;
+                    authPage.classList.remove('active');
+                    appContainer.classList.remove('hidden');
+                    await setupUIForRole(userProfile.role);
+                } else {
+                     throw new Error('اطلاعات پروفایل کاربر خالی است.');
+                }
+                
+            } else if (event === 'SIGNED_OUT') {
                 await handleLogout();
             }
-            hideLoading();
-        } else if (event === 'SIGNED_OUT') {
+        } catch (err) {
+            console.error("خطای اساسی در زمان تغییر وضعیت احراز هویت:", err);
+            showToast(`یک خطای اساسی رخ داد: ${err.message}`, 'error');
             await handleLogout();
+        } finally {
+            hideLoading();
         }
     });
 
@@ -1098,63 +1088,166 @@
     // --- CLIENT: PROFILE ---
     const renderClientProfile = async () => {
         const page = document.getElementById('client-profile-page');
+        page.classList.add('bg-gradient-to-b', 'from-teal-400', 'to-blue-500');
+
         page.innerHTML = `
-            <div class="space-y-6">
-                <div class="flex flex-col items-center space-y-2">
-                    <div class="w-24 h-24 rounded-full bg-teal-500 text-white flex items-center justify-center text-4xl font-bold">
-                        ${userProfile.full_name.charAt(0)}
+            <div class="p-4 space-y-6">
+                <div onclick="openProfileEditor()" class="bg-white/90 backdrop-blur-sm p-4 rounded-2xl shadow-lg flex items-center justify-between cursor-pointer active:bg-gray-100 transition-colors">
+                    <div class="flex items-center gap-4">
+                        <div class="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center">
+                            <i data-lucide="user" class="w-8 h-8 text-teal-600"></i>
+                        </div>
+                        <div>
+                            <p class="font-bold text-gray-800">اطلاعات کاربری</p>
+                            <p class="text-sm text-gray-500">${userProfile.full_name || 'کاربر مهمان'}</p>
+                        </div>
                     </div>
-                    <h1 class="text-2xl font-bold">${userProfile.full_name}</h1>
-                    <p class="text-gray-500">${currentUser.email}</p>
-                </div>
-                
-                <div class="bg-white p-4 rounded-2xl shadow-md space-y-4">
-                    <h2 class="text-lg font-bold">ویرایش پروفایل</h2>
-                    <div class="space-y-2">
-                        <label for="fullname-input" class="block text-sm font-medium text-gray-700">نام کامل</label>
-                        <input id="fullname-input" type="text" class="w-full p-2 border rounded-lg" value="${userProfile.full_name || ''}">
-                    </div>
-                    <div class="space-y-2">
-                        <label for="bio-input" class="block text-sm font-medium text-gray-700">بیوگرافی (اختیاری)</label>
-                        <textarea id="bio-input" class="w-full h-24 p-2 border rounded-lg" placeholder="کمی درباره خودتان بنویسید...">${userProfile.bio || ''}</textarea>
-                    </div>
-                    <button onclick="updateClientProfile()" class="w-full bg-teal-500 text-white py-2 rounded-lg font-semibold">ذخیره تغییرات</button>
+                    <i data-lucide="chevron-left" class="text-gray-400"></i>
                 </div>
 
-                <div class="bg-white p-4 rounded-2xl shadow-md space-y-2">
-                    <h2 class="text-lg font-bold">سوابق</h2>
-                    <button onclick="viewTestHistory()" class="w-full text-right flex justify-between items-center p-2 hover:bg-gray-100 rounded-lg">
-                        <span>سوابق تست‌ها</span>
-                        <i data-lucide="chevron-left"></i>
-                    </button>
+                <div class="bg-white p-2 rounded-2xl shadow-md">
+                    <a href="#" onclick="showWallet()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
+                        <div class="flex items-center gap-4">
+                            <i data-lucide="wallet" class="text-gray-600"></i>
+                            <span class="font-semibold text-gray-700">اعتبار کیف پول</span>
+                        </div>
+                        <i data-lucide="chevron-left" class="text-gray-400"></i>
+                    </a>
+                    <a href="#" onclick="viewTestHistory()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
+                        <div class="flex items-center gap-4">
+                            <i data-lucide="clipboard-list" class="text-gray-600"></i>
+                            <span class="font-semibold text-gray-700">سوابق تست‌ها</span>
+                        </div>
+                        <i data-lucide="chevron-left" class="text-gray-400"></i>
+                    </a>
+                    <a href="#" onclick="showSupportRequest()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
+                        <div class="flex items-center gap-4">
+                            <i data-lucide="headphones" class="text-gray-600"></i>
+                            <span class="font-semibold text-gray-700">درخواست پشتیبانی</span>
+                        </div>
+                        <i data-lucide="chevron-left" class="text-gray-400"></i>
+                    </a>
+                    <a href="#" onclick="showFaq()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
+                        <div class="flex items-center gap-4">
+                            <i data-lucide="help-circle" class="text-gray-600"></i>
+                            <span class="font-semibold text-gray-700">سوالات متداول</span>
+                        </div>
+                        <i data-lucide="chevron-left" class="text-gray-400"></i>
+                    </a>
+                    <a href="#" onclick="showAboutUs()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
+                        <div class="flex items-center gap-4">
+                            <i data-lucide="info" class="text-gray-600"></i>
+                            <span class="font-semibold text-gray-700">درباره ما</span>
+                        </div>
+                        <i data-lucide="chevron-left" class="text-gray-400"></i>
+                    </a>
+                    <a href="#" onclick="showTerms()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
+                        <div class="flex items-center gap-4">
+                            <i data-lucide="file-text" class="text-gray-600"></i>
+                            <span class="font-semibold text-gray-700">قوانین و مقررات</span>
+                        </div>
+                        <i data-lucide="chevron-left" class="text-gray-400"></i>
+                    </a>
+                    <div class="border-t my-1 mx-2"></div>
+                    <a href="#" onclick="handleLogout()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg text-red-500">
+                        <div class="flex items-center gap-4">
+                            <i data-lucide="log-out"></i>
+                            <span class="font-semibold">خروج</span>
+                        </div>
+                        <i data-lucide="chevron-left" class="text-gray-400"></i>
+                    </a>
                 </div>
 
-                <button onclick="handleLogout()" class="w-full bg-red-500 text-white font-bold py-3 rounded-lg hover:bg-red-600 transition">خروج از حساب</button>
+                <p class="text-center text-white/70 text-sm">نسخه ۱.۰.۴</p>
             </div>
         `;
         lucide.createIcons();
     };
     
-    const updateClientProfile = async () => {
-        const newName = document.getElementById('fullname-input').value;
-        const newBio = document.getElementById('bio-input').value;
+    const openProfileEditor = () => {
+        const content = `
+            <div class="space-y-4">
+                <div class="space-y-2">
+                    <label for="modal-fullname-input" class="block text-sm font-medium text-gray-700">نام کامل</label>
+                    <input id="modal-fullname-input" type="text" class="w-full p-2 border rounded-lg" value="${userProfile.full_name || ''}">
+                </div>
+                <div class="space-y-2">
+                    <label for="modal-bio-input" class="block text-sm font-medium text-gray-700">بیوگرافی (اختیاری)</label>
+                    <textarea id="modal-bio-input" class="w-full h-24 p-2 border rounded-lg" placeholder="کمی درباره خودتان بنویسید...">${userProfile.bio || ''}</textarea>
+                </div>
+                <button id="save-profile-btn" class="w-full bg-teal-500 text-white py-2 rounded-lg font-semibold">ذخیره تغییرات</button>
+            </div>
+        `;
+        showModal('ویرایش اطلاعات کاربری', content);
         
-        showLoading();
-        const { data, error } = await db.from('profiles').update({ 
-            full_name: newName,
-            bio: newBio
-        }).eq('id', currentUser.id).select().single();
-        hideLoading();
-        
-        if (error) {
-            showToast('خطا در به‌روزرسانی پروفایل.', 'error');
-        } else {
-            userProfile = data; // Update local profile object
-            showToast('پروفایل با موفقیت به‌روزرسانی شد.', 'success');
-            await renderClientProfile();
-        }
+        document.getElementById('save-profile-btn').onclick = async () => {
+            const newName = document.getElementById('modal-fullname-input').value;
+            const newBio = document.getElementById('modal-bio-input').value;
+            
+            closeModal(); 
+            showLoading();
+            const { data, error } = await db.from('profiles').update({ 
+                full_name: newName,
+                bio: newBio
+            }).eq('id', currentUser.id).select().single();
+            hideLoading();
+            
+            if (error) {
+                showToast('خطا در به‌روزرسانی پروفایل.', 'error');
+            } else {
+                userProfile = data;
+                showToast('پروفایل با موفقیت به‌روزرسانی شد.', 'success');
+                await renderClientProfile();
+            }
+        };
     };
-    
+
+    const showWallet = () => {
+        showModal('اعتبار کیف پول', '<p>این قابلیت به زودی اضافه خواهد شد. اعتبار فعلی شما: ۰ تومان</p>');
+    };
+
+    const showSupportRequest = () => {
+        const content = `
+            <p class="mb-4">برای دریافت پشتیبانی، لطفاً با ایمیل support@saino.app در تماس باشید یا فرم زیر را پر کنید.</p>
+            <form id="support-form">
+                <textarea class="w-full h-32 p-2 border rounded-lg" placeholder="مشکل خود را اینجا شرح دهید..."></textarea>
+                <button type="submit" class="mt-2 w-full bg-teal-500 text-white py-2 rounded-lg font-semibold">ارسال درخواست</button>
+            </form>
+        `;
+        showModal('درخواست پشتیبانی', content);
+        document.getElementById('support-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            closeModal();
+            showToast('درخواست شما با موفقیت ثبت شد. به زودی با شما تماس می‌گیریم.', 'success');
+        });
+    };
+
+    const showFaq = () => {
+        const content = `
+            <div class="space-y-4">
+                <div>
+                    <h4 class="font-bold">چگونه می‌توانم نوبت رزرو کنم؟</h4>
+                    <p class="text-sm text-gray-600">از منوی پایین صفحه به بخش «نوبت‌ها» بروید و پس از انتخاب روانشناس، تاریخ و ساعت مورد نظر خود را ثبت کنید.</p>
+                </div>
+                <div>
+                    <h4 class="font-bold">آیا اطلاعات من محرمانه باقی می‌ماند؟</h4>
+                    <p class="text-sm text-gray-600">بله، تمام اطلاعات شما، از جمله پیام‌ها و نتایج تست‌ها، کاملاً محرمانه بوده و فقط توسط روانشناس معالج شما قابل مشاهده است.</p>
+                </div>
+            </div>
+        `;
+        showModal('سوالات متداول', content);
+    };
+
+    const showAboutUs = () => {
+        const content = '<p>ساینو یک پلتفرم جامع برای مدیریت و بهبود سلامت روان است که به شما کمک می‌کند با روانشناسان متخصص در ارتباط باشید و وضعیت روحی خود را پیگیری کنید.</p>';
+        showModal('درباره ساینو', content);
+    };
+
+    const showTerms = () => {
+        const content = '<p>استفاده از اپلیکیشن ساینو به منزله پذیرش تمام قوانین و مقررات است. این پلتفرم جایگزین درمان اورژانسی نیست. در موارد حاد، لطفاً با اورژانس اجتماعی (۱۲۳) تماس بگیرید.</p>';
+        showModal('قوانین و مقررات', content);
+    };
+
     const viewTestHistory = async () => {
         showLoading();
         const { data, error } = await db.from('test_results')
@@ -1205,7 +1298,7 @@
             .limit(5);
 
         const { count: clientCount, error: clientError } = await db
-            .from('therapist_clients_view') // Using a view for distinct clients
+            .from('therapist_clients_view')
             .select('client_id', { count: 'exact', head: true })
             .eq('therapist_id', currentUser.id);
             
@@ -1456,7 +1549,6 @@
                 <h1 class="font-bold text-lg">${otherUser.full_name}</h1>
             </header>
             <div id="chat-messages" class="flex-grow p-4 space-y-4 overflow-y-auto">
-                <!-- Messages will be loaded here -->
             </div>
             <footer class="bg-white p-2 flex items-center gap-2 border-t flex-shrink-0">
                 <input id="chat-input" type="text" class="flex-grow bg-gray-100 rounded-full py-2 px-4 focus:outline-none" placeholder="پیام خود را بنویسید...">
@@ -1615,12 +1707,17 @@
     window.resetTestsPage = resetTestsPage;
     window.bookAppointment = bookAppointment;
     window.cancelAppointment = cancelAppointment;
-    window.updateClientProfile = updateClientProfile;
+    window.openProfileEditor = openProfileEditor;
+    window.showWallet = showWallet;
+    window.showSupportRequest = showSupportRequest;
+    window.showFaq = showFaq;
+    window.showAboutUs = showAboutUs;
+    window.showTerms = showTerms;
+    window.viewTestHistory = viewTestHistory;
     window.updateTherapistProfile = updateTherapistProfile;
     window.viewClientDetails = viewClientDetails;
     window.startChatWith = startChatWith;
     window.goBackFromChat = goBackFromChat;
-    window.viewTestHistory = viewTestHistory;
 
 </script>
 </body>
