@@ -137,13 +137,13 @@
 </head>
 <body class="bg-gray-100">
 
-    <div id="loading-spinner" class="fixed inset-0 bg-white/80 z-50 flex items-center justify-center backdrop-blur-sm hidden">
+    <div id="loading-spinner" class="fixed inset-0 bg-white/80 z-50 flex items-center justify-center backdrop-blur-sm">
         <div class="loader"></div>
     </div>
 
     <div id="modal-container" class="modal-backdrop"></div>
 
-    <div id="auth-page" class="page active bg-gradient-to-br from-teal-400 to-blue-500">
+    <div id="auth-page" class="page bg-gradient-to-br from-teal-400 to-blue-500">
         <div class="w-full h-full flex items-center justify-center">
             <div class="w-full max-w-md m-auto p-8">
                 <div class="text-center mb-10">
@@ -361,6 +361,7 @@
             hideLoading();
         } else {
             showToast('با موفقیت وارد شدید!', 'success');
+            // onAuthStateChange will handle the rest
         }
     });
 
@@ -383,6 +384,7 @@
             }
         });
         
+        hideLoading();
         if (error) {
             showToast(`خطا در ثبت‌نام: ${error.message}`, 'error');
         } else {
@@ -392,19 +394,16 @@
                  showToast('ثبت‌نام موفقیت‌آمیز بود. لطفاً ایمیل خود را برای تایید بررسی کنید.', 'info');
             }
         }
-        hideLoading();
     });
 
     const handleLogout = async () => {
         showLoading();
-        await db.auth.signOut();
-        currentUser = null;
-        userProfile = null;
-        if(chatSubscription) chatSubscription.unsubscribe();
-        authPage.classList.add('active');
-        appContainer.classList.add('hidden');
-        appContainer.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        hideLoading();
+        const { error } = await db.auth.signOut();
+        if (error) {
+            showToast(`خطا در خروج: ${error.message}`, 'error');
+            hideLoading();
+        }
+        // onAuthStateChange will handle UI changes and hiding the spinner
     };
 
     // =================================================================
@@ -413,42 +412,52 @@
 
     db.auth.onAuthStateChange(async (event, session) => {
         try {
-            if (event === 'TOKEN_REFRESHED') {
-                return; 
-            }
-
-            if (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && session)) {
+            if (session) { // User is logged in or session restored
                 if (currentUser && currentUser.id === session.user.id) {
-                    return; 
+                    return; // Already initialized
                 }
                 showLoading();
                 currentUser = session.user;
                 const { data, error } = await db.from('profiles').select('*').eq('id', currentUser.id).single();
 
-                if (error && !data) {
-                    throw new Error(`پروفایل یافت نشد: ${error.message}`);
+                if (error) {
+                    throw new Error(`خطا در دریافت پروفایل: ${error.message}`);
                 }
-
+                
                 if (data) {
                     userProfile = data;
                     authPage.classList.remove('active');
                     appContainer.classList.remove('hidden');
                     await setupUIForRole(userProfile.role);
                 } else {
-                     throw new Error('اطلاعات پروفایل کاربر خالی است.');
+                    throw new Error('پروفایل کاربر یافت نشد.');
                 }
-                
-            } else if (event === 'SIGNED_OUT') {
-                await handleLogout();
+                hideLoading();
+            } else { // User is logged out or no session
+                currentUser = null;
+                userProfile = null;
+                if (chatSubscription) {
+                    chatSubscription.unsubscribe();
+                    chatSubscription = null;
+                }
+                authPage.classList.add('active');
+                appContainer.classList.add('hidden');
+                document.getElementById('login-form-container').classList.remove('hidden');
+                document.getElementById('signup-form-container').classList.add('hidden');
+                appContainer.querySelectorAll('.page').forEach(p => {
+                    p.innerHTML = '';
+                    p.classList.remove('active');
+                });
+                hideLoading();
             }
         } catch (err) {
-            console.error("خطای اساسی در زمان تغییر وضعیت احراز هویت:", err);
-            showToast(`یک خطای اساسی رخ داد: ${err.message}`, 'error');
-            await handleLogout();
-        } finally {
+            console.error("خطای احراز هویت:", err);
+            showToast(`خطا: ${err.message}`, 'error');
             hideLoading();
+            await handleLogout(); // Attempt to sign out to reset state
         }
     });
+
 
     const setupUIForRole = async (role) => {
         const navBar = document.getElementById('bottom-nav-bar');
@@ -470,7 +479,6 @@
                     <a href="#" id="nav-tests" class="nav-item flex flex-col items-center text-gray-500" onclick="navigateTo('client-tests-page')">
                         <i data-lucide="file-text"></i><span class="text-xs">تست‌ها</span>
                     </a>
-                    <!-- NEW: Training Section Button -->
                     <a href="#" id="nav-training" class="nav-item flex flex-col items-center text-gray-500" onclick="navigateToTraining()">
                         <i data-lucide="video"></i><span class="text-xs">آموزش</span>
                     </a>
@@ -1348,7 +1356,7 @@
             .limit(5);
 
         const { count: clientCount, error: clientError } = await db
-            .from('therapist_clients_view')
+            .from('appointments')
             .select('client_id', { count: 'exact', head: true })
             .eq('therapist_id', currentUser.id);
             
@@ -1389,38 +1397,62 @@
         lucide.createIcons();
     };
 
-    // --- THERAPIST: CLIENTS ---
+    // --- THERAPIST: CLIENTS (FIXED) ---
     const renderTherapistClients = async () => {
         const page = document.getElementById('therapist-clients-page');
         showLoading();
-        const { data: clients, error } = await db
-            .from('therapist_clients_view')
-            .select('client_id, client_full_name, client_email')
-            .eq('therapist_id', currentUser.id);
-        hideLoading();
-
         page.innerHTML = `
             <div>
                 <h1 class="text-2xl font-bold text-gray-800 mb-6">لیست مراجعین</h1>
                 <div id="client-list-container" class="space-y-3">
-                    ${error ? '<p class="text-red-500">خطا در بارگذاری</p>' : ''}
-                    ${clients && clients.length > 0 ? clients.map(client => `
-                        <div class="bg-white p-4 rounded-2xl shadow-md flex justify-between items-center">
-                            <div>
-                                <p class="font-bold">${client.client_full_name}</p>
-                                <p class="text-sm text-gray-500">${client.client_email}</p>
-                            </div>
-                            <div class="flex gap-2">
-                                <button onclick="viewClientDetails('${client.client_id}')" class="p-2 bg-gray-100 rounded-lg text-gray-600"><i data-lucide="eye"></i></button>
-                                <button onclick="startChatWith('${client.client_id}')" class="p-2 bg-teal-100 rounded-lg text-teal-600"><i data-lucide="message-square"></i></button>
-                            </div>
-                        </div>
-                    `).join('') : '<p class="text-center text-gray-500">شما هیچ مراجعه‌کننده‌ای ندارید.</p>'}
+                    <p class="text-center text-gray-500">در حال بارگذاری لیست مراجعین...</p>
                 </div>
-            </div>
-        `;
-        lucide.createIcons();
+            </div>`;
+
+        try {
+            const { data: appointments, error: aptError } = await db
+                .from('appointments')
+                .select('client_id')
+                .eq('therapist_id', currentUser.id);
+
+            if (aptError) throw aptError;
+
+            const clientIds = [...new Set(appointments.map(apt => apt.client_id).filter(id => id))];
+
+            let clientsHTML = '';
+            if (clientIds.length > 0) {
+                const { data: clients, error: clientsError } = await db
+                    .from('profiles')
+                    .select('id, full_name, email')
+                    .in('id', clientIds);
+
+                if (clientsError) throw clientsError;
+
+                clientsHTML = clients.map(client => `
+                    <div class="bg-white p-4 rounded-2xl shadow-md flex justify-between items-center">
+                        <div>
+                            <p class="font-bold">${client.full_name}</p>
+                            <p class="text-sm text-gray-500">${client.email}</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="viewClientDetails('${client.id}')" class="p-2 bg-gray-100 rounded-lg text-gray-600"><i data-lucide="eye"></i></button>
+                            <button onclick="startChatWith('${client.id}')" class="p-2 bg-teal-100 rounded-lg text-teal-600"><i data-lucide="message-square"></i></button>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                clientsHTML = '<p class="text-center text-gray-500">شما هیچ مراجعه‌کننده‌ای ندارید.</p>';
+            }
+            document.getElementById('client-list-container').innerHTML = clientsHTML;
+        } catch (error) {
+            console.error("Error loading clients:", error);
+            document.getElementById('client-list-container').innerHTML = `<p class="text-red-500 text-center">خطا در بارگذاری لیست مراجعین.</p>`;
+        } finally {
+            hideLoading();
+            lucide.createIcons();
+        }
     };
+
 
     const viewClientDetails = async (clientId) => {
         showLoading();
@@ -1583,7 +1615,7 @@
     };
 
     // =================================================================
-    // SHARED: CHAT PAGE
+    // SHARED: CHAT PAGE (FIXED)
     // =================================================================
     const startChatWith = async (otherUserId) => {
         const page = document.getElementById('chat-page');
@@ -1644,15 +1676,31 @@
         await loadMessages();
 
         const handleSendMessage = async () => {
-             const messageText = chatInput.value.trim();
+            const messageText = chatInput.value.trim();
             if (!messageText) return;
+
+            const tempMessage = {
+                sender_id: currentUser.id,
+                message_text: messageText,
+                created_at: new Date().toISOString()
+            };
             
+            // Optimistic UI update
+            messageContainer.innerHTML += renderMessage(tempMessage);
+            messageContainer.scrollTop = messageContainer.scrollHeight;
             chatInput.value = '';
-            await db.from('chat_messages').insert({
+
+            const { error } = await db.from('chat_messages').insert({
                 sender_id: currentUser.id,
                 receiver_id: otherUserId,
                 message_text: messageText
             });
+
+            if (error) {
+                console.error('Error sending message:', error);
+                showToast('پیام ارسال نشد.', 'error');
+                // Optionally remove the optimistic message or mark it as failed
+            }
         };
 
         sendBtn.onclick = handleSendMessage;
@@ -1666,8 +1714,8 @@
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, 
             (payload) => {
                 const newMessage = payload.new;
-                if ((newMessage.sender_id === currentUser.id && newMessage.receiver_id === otherUserId) || 
-                    (newMessage.sender_id === otherUserId && newMessage.receiver_id === currentUser.id)) {
+                // Only render incoming messages from the other user to avoid duplication
+                if (newMessage.sender_id === otherUserId && newMessage.receiver_id === currentUser.id) {
                     messageContainer.innerHTML += renderMessage(newMessage);
                     messageContainer.scrollTop = messageContainer.scrollHeight;
                 }
@@ -1768,7 +1816,6 @@
     window.viewClientDetails = viewClientDetails;
     window.startChatWith = startChatWith;
     window.goBackFromChat = goBackFromChat;
-    // New functions made global
     window.navigateToTraining = navigateToTraining;
     window.goBackFromTraining = goBackFromTraining;
 
