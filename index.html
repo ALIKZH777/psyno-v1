@@ -697,11 +697,15 @@
                     <p class="text-sm text-gray-500 mb-3">افکارت رو اینجا بنویس. این یک فضای کاملا شخصیه.</p>
                     <textarea id="journal-input" class="w-full h-24 p-2 border rounded-lg focus:ring-teal-500 focus:border-teal-500" placeholder="امروز چه گذشت..."></textarea>
                     <button onclick="submitJournal()" class="mt-2 w-full bg-teal-500 text-white py-2 rounded-lg font-semibold hover:bg-teal-600 transition">ذخیره یادداشت</button>
+                    
+                    <div id="journal-history-title" class="font-bold text-lg mb-2 mt-6">یادداشت‌های اخیر</div>
+                    <div id="journal-history" class="space-y-3"></div>
                 </div>
             </div>
         `;
         await calculateAndDisplayHealthScore();
         await loadMoodChart();
+        await loadJournalEntries();
         lucide.createIcons();
     };
     
@@ -823,6 +827,7 @@
         });
     };
 
+    // --- Journal Functions (NEW and UPDATED) ---
     const submitJournal = async () => {
         const content = document.getElementById('journal-input').value;
         if (!content.trim()) {
@@ -837,6 +842,115 @@
         } else {
             showToast('یادداشت شما با موفقیت ذخیره شد.', 'success');
             document.getElementById('journal-input').value = '';
+            await loadJournalEntries(); // Refresh the list
+        }
+    };
+
+    const loadJournalEntries = async () => {
+        const historyContainer = document.getElementById('journal-history');
+        if (!historyContainer) return;
+
+        historyContainer.innerHTML = '<p class="text-center text-gray-500">در حال بارگذاری یادداشت‌ها...</p>';
+
+        const { data, error } = await db
+            .from('journal_entries')
+            .select('id, content, created_at')
+            .eq('user_id', currentUser.id)
+            .order('created_at', { ascending: false })
+            .limit(10);
+
+        if (error) {
+            console.error('Error loading journal entries:', error);
+            historyContainer.innerHTML = '<p class="text-red-500 text-center">خطا در بارگذاری یادداشت‌ها.</p>';
+            return;
+        }
+
+        if (data.length === 0) {
+            historyContainer.innerHTML = '<p class="text-center text-gray-500">هنوز یادداشتی ثبت نکرده‌اید.</p>';
+            return;
+        }
+
+        historyContainer.innerHTML = data.map(entry => `
+            <div class="bg-gray-50 p-3 rounded-lg border" id="journal-entry-${entry.id}">
+                <p class="text-xs text-gray-500 mb-2">${new persianDate(new Date(entry.created_at)).format('dddd D MMMM YYYY - HH:mm')}</p>
+                <p class="text-gray-700 whitespace-pre-wrap">${entry.content}</p>
+                <div class="flex justify-end gap-2 mt-2">
+                    <button onclick="editJournalEntry(${entry.id})" class="p-1 text-blue-600 hover:text-blue-800"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                    <button onclick="confirmDeleteJournalEntry(${entry.id})" class="p-1 text-red-600 hover:text-red-800"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                </div>
+            </div>
+        `).join('');
+        lucide.createIcons();
+    };
+
+    const editJournalEntry = async (entryId) => {
+        const { data: entry, error } = await db.from('journal_entries').select('content').eq('id', entryId).single();
+        if (error || !entry) {
+            showToast('خطا در یافتن یادداشت.', 'error');
+            return;
+        }
+
+        const contentHTML = `<textarea id="edit-journal-textarea" class="w-full h-48 p-2 border rounded-lg">${entry.content}</textarea>`;
+        const actions = [{
+            text: 'ذخیره تغییرات',
+            className: 'px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600',
+            handler: `updateJournalEntry(${entryId})`
+        }];
+
+        showModal('ویرایش یادداشت', contentHTML, actions);
+    };
+
+    const updateJournalEntry = async (entryId) => {
+        const newContent = document.getElementById('edit-journal-textarea').value;
+        if (!newContent.trim()) {
+            showToast('یادداشت نمی‌تواند خالی باشد.', 'error');
+            return;
+        }
+        closeModal();
+        showLoading();
+        const { error } = await db.from('journal_entries').update({ content: newContent }).eq('id', entryId);
+        hideLoading();
+        if (error) {
+            showToast('خطا در به‌روزرسانی یادداشت.', 'error');
+        } else {
+            showToast('یادداشت با موفقیت به‌روزرسانی شد.', 'success');
+            await loadJournalEntries();
+        }
+    };
+
+    const confirmDeleteJournalEntry = (entryId) => {
+        const content = 'آیا از حذف این یادداشت مطمئن هستید؟ این عمل غیرقابل بازگشت است.';
+        const actions = [{
+            text: 'حذف کن',
+            className: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700',
+            handler: `deleteJournalEntry(${entryId})`
+        }];
+        showModal('تایید حذف', content, actions);
+    };
+
+    const deleteJournalEntry = async (entryId) => {
+        closeModal();
+        showLoading();
+        const { error } = await db.from('journal_entries').delete().eq('id', entryId);
+        hideLoading();
+        if (error) {
+            showToast('خطا در حذف یادداشت.', 'error');
+        } else {
+            showToast('یادداشت حذف شد.', 'success');
+            const entryElement = document.getElementById(`journal-entry-${entryId}`);
+            if(entryElement) {
+                entryElement.style.transition = 'opacity 0.5s, transform 0.5s';
+                entryElement.style.opacity = '0';
+                entryElement.style.transform = 'scale(0.9)';
+                setTimeout(() => {
+                    entryElement.remove();
+                    // Check if the list is empty now
+                    const historyContainer = document.getElementById('journal-history');
+                    if (!historyContainer.hasChildNodes()) {
+                         historyContainer.innerHTML = '<p class="text-center text-gray-500">هنوز یادداشتی ثبت نکرده‌اید.</p>';
+                    }
+                }, 500);
+            }
         }
     };
     
@@ -1818,6 +1932,13 @@
     window.goBackFromChat = goBackFromChat;
     window.navigateToTraining = navigateToTraining;
     window.goBackFromTraining = goBackFromTraining;
+    // New Journal Functions
+    window.loadJournalEntries = loadJournalEntries;
+    window.editJournalEntry = editJournalEntry;
+    window.updateJournalEntry = updateJournalEntry;
+    window.confirmDeleteJournalEntry = confirmDeleteJournalEntry;
+    window.deleteJournalEntry = deleteJournalEntry;
+
 
 </script>
 </body>
