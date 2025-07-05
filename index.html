@@ -207,6 +207,9 @@
         <div id="client-tests-page" class="page"></div>
         <div id="client-appointments-page" class="page"></div>
         <div id="client-profile-page" class="page"></div>
+        
+        <!-- New Training Page -->
+        <div id="training-page" class="page flex-layout"></div>
 
         <!-- Therapist Pages -->
         <div id="therapist-dashboard-page" class="page"></div>
@@ -296,7 +299,7 @@
         const activePage = document.querySelector('.page.active');
         const navBar = document.getElementById('bottom-nav-bar');
 
-        if (activePage && activePage.id !== 'chat-page' && pageId !== activePage.id) {
+        if (activePage && activePage.id !== 'chat-page' && activePage.id !== 'training-page' && pageId !== activePage.id) {
             lastPageId = activePage.id;
         }
 
@@ -305,7 +308,7 @@
 
         if (targetPage) {
             targetPage.classList.add('active');
-            if (pageId === 'chat-page') {
+            if (pageId === 'chat-page' || pageId === 'training-page') {
                 targetPage.classList.add('flex-layout');
                 navBar.classList.add('hidden');
             } else {
@@ -408,7 +411,6 @@
     // APP INITIALIZATION & ROUTING
     // =================================================================
 
-    // [اصلاح شد] بخش مدیریت ورود کاربر برای جلوگیری از رفرش شدن صفحه
     db.auth.onAuthStateChange(async (event, session) => {
         try {
             if (event === 'TOKEN_REFRESHED') {
@@ -468,6 +470,10 @@
                     <a href="#" id="nav-tests" class="nav-item flex flex-col items-center text-gray-500" onclick="navigateTo('client-tests-page')">
                         <i data-lucide="file-text"></i><span class="text-xs">تست‌ها</span>
                     </a>
+                    <!-- NEW: Training Section Button -->
+                    <a href="#" id="nav-training" class="nav-item flex flex-col items-center text-gray-500" onclick="navigateToTraining()">
+                        <i data-lucide="video"></i><span class="text-xs">آموزش</span>
+                    </a>
                     <a href="#" id="nav-appointments" class="nav-item flex flex-col items-center text-gray-500" onclick="navigateTo('client-appointments-page')">
                         <i data-lucide="calendar-days"></i><span class="text-xs">نوبت‌ها</span>
                     </a>
@@ -510,6 +516,50 @@
         }
         lucide.createIcons();
     };
+
+    // =================================================================
+    // NEW: TRAINING SECTION
+    // =================================================================
+    const navigateToTraining = () => {
+        const page = document.getElementById('training-page');
+        const navBar = document.getElementById('bottom-nav-bar');
+        const activePage = document.querySelector('.page.active');
+        
+        if (activePage && activePage.id !== 'training-page') {
+            lastPageId = activePage.id;
+        }
+
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+
+        page.innerHTML = `
+            <header class="bg-white shadow-sm p-4 flex items-center gap-4 flex-shrink-0">
+                <button onclick="goBackFromTraining()" class="text-gray-600"><i data-lucide="arrow-right"></i></button>
+                <h1 class="font-bold text-lg">بخش آموزش</h1>
+            </header>
+            <iframe src="https://vids.psynoland.ir/" class="w-full border-0 flex-grow"></iframe>
+        `;
+        lucide.createIcons();
+        page.classList.add('active', 'flex-layout');
+        page.style.padding = '0';
+
+        navBar.classList.add('hidden');
+        
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.remove('text-teal-600');
+            item.classList.add('text-gray-500');
+        });
+    };
+
+    const goBackFromTraining = () => {
+        const page = document.getElementById('training-page');
+        page.classList.remove('active', 'flex-layout');
+        page.innerHTML = '';
+        page.style.padding = '';
+
+        document.getElementById('bottom-nav-bar').classList.remove('hidden');
+        navigateTo(lastPageId);
+    };
+
 
     // =================================================================
     // AI HELPER
@@ -1718,6 +1768,9 @@
     window.viewClientDetails = viewClientDetails;
     window.startChatWith = startChatWith;
     window.goBackFromChat = goBackFromChat;
+    // New functions made global
+    window.navigateToTraining = navigateToTraining;
+    window.goBackFromTraining = goBackFromTraining;
 
 </script>
 </body>
