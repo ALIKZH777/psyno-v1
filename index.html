@@ -108,6 +108,12 @@
             direction: ltr;
         }
 
+        #loading-spinner {
+            display: none; /* Hidden by default */
+        }
+        #loading-spinner.visible {
+            display: flex;
+        }
         #loading-spinner .loader {
             width: 50px;
             height: 50px;
@@ -133,11 +139,22 @@
                 transform: rotate(1turn);
             }
         }
+        
+        /* Star rating styles */
+        .star-rating .star {
+            cursor: pointer;
+            color: #d1d5db; /* gray-300 */
+            transition: color 0.2s;
+        }
+        .star-rating .star:hover,
+        .star-rating .star.selected {
+            color: #f59e0b; /* amber-500 */
+        }
     </style>
 </head>
 <body class="bg-gray-100">
 
-    <div id="loading-spinner" class="fixed inset-0 bg-white/80 z-50 flex items-center justify-center backdrop-blur-sm">
+    <div id="loading-spinner" class="fixed inset-0 bg-white/80 z-50 items-center justify-center backdrop-blur-sm">
         <div class="loader"></div>
     </div>
 
@@ -233,7 +250,7 @@
     // =================================================================
     const SUPABASE_URL = 'https://atrhsfozgnfhhbfxgsnu.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0cmhzZm96Z25maGhiZnhnc251Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4NjQ3MTYsImV4cCI6MjA2NjQ0MDcxNn0.eGODASElOsWJZ_cXmumZZwdQlcBGahm89n2UCuUxWk8';
-    const GEMINI_API_KEY = 'AIzaSyA9-7HkBuizbyS4a2ZBnTmq9jXGj_WEOuo'; 
+    const GEMINI_API_KEY = 'YOUR_GEMINI_API_KEY'; // Replace with your actual key
     const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
     
     // =================================================================
@@ -248,15 +265,30 @@
     let chatSubscription = null;
     let moodChartInstance = null;
     let clientMoodChartInstance = null;
-    let selectedAppointmentTimestamp = null;
     let lastPageId = 'client-dashboard-page';
 
     // =================================================================
     // UTILITY & HELPER FUNCTIONS
     // =================================================================
+    
+    const defaultAvatarSvg = (bgColor = 'bg-gray-200', iconColor = 'text-gray-500') => `
+        <div class="w-full h-full flex items-center justify-center rounded-full ${bgColor}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="60%" height="60%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="${iconColor}"><circle cx="12" cy="8" r="4"/><path d="M12 12c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+        </div>
+    `;
 
-    const showLoading = () => document.getElementById('loading-spinner').classList.remove('hidden');
-    const hideLoading = () => document.getElementById('loading-spinner').classList.add('hidden');
+    const renderAvatar = (containerEl, avatarUrl, options = {}) => {
+        const { bgColor = 'bg-teal-100', iconColor = 'text-teal-600' } = options;
+        if (avatarUrl) {
+            containerEl.innerHTML = `<img src="${avatarUrl}" class="w-full h-full object-cover rounded-full">`;
+        } else {
+            containerEl.innerHTML = defaultAvatarSvg(bgColor, iconColor);
+        }
+    };
+
+
+    const showLoading = () => document.getElementById('loading-spinner').classList.add('visible');
+    const hideLoading = () => document.getElementById('loading-spinner').classList.remove('visible');
 
     const showModal = (title, content, actions = []) => {
         const modalContainer = document.getElementById('modal-container');
@@ -328,6 +360,26 @@
             activeNavItem.classList.add('text-teal-600');
         }
     };
+
+    const renderStars = (rating, totalRatings = 0) => {
+        const r = Math.round(rating * 2) / 2; // Round to nearest 0.5
+        let starsHTML = '<div class="flex items-center gap-1">';
+        for (let i = 1; i <= 5; i++) {
+            if (r >= i) {
+                starsHTML += '<i data-lucide="star" class="w-4 h-4 text-amber-400 fill-current"></i>';
+            } else if (r === i - 0.5) {
+                starsHTML += '<i data-lucide="star-half" class="w-4 h-4 text-amber-400 fill-current"></i>';
+            } else {
+                starsHTML += '<i data-lucide="star" class="w-4 h-4 text-gray-300"></i>';
+            }
+        }
+        if (totalRatings > 0) {
+            starsHTML += `<span class="text-xs text-gray-500 mr-1">(${totalRatings} نظر)</span>`;
+        }
+        starsHTML += '</div>';
+        return starsHTML;
+    };
+
 
     // =================================================================
     // AUTHENTICATION
@@ -413,26 +465,30 @@
     db.auth.onAuthStateChange(async (event, session) => {
         try {
             if (session) { // User is logged in or session restored
-                if (currentUser && currentUser.id === session.user.id) {
+                if (currentUser && currentUser.id === session.user.id && userProfile) {
                     return; // Already initialized
                 }
                 showLoading();
                 currentUser = session.user;
                 const { data, error } = await db.from('profiles').select('*').eq('id', currentUser.id).single();
 
-                if (error) {
-                    throw new Error(`خطا در دریافت پروفایل: ${error.message}`);
+                if (error || !data) {
+                    console.warn("Profile not found on first attempt, retrying...");
+                    await new Promise(resolve => setTimeout(resolve, 1500)); 
+                    const { data: retryData, error: retryError } = await db.from('profiles').select('*').eq('id', currentUser.id).single();
+                    if (retryError || !retryData) {
+                         throw new Error(`خطا در دریافت پروفایل پس از تلاش مجدد: ${retryError?.message || 'پروفایل یافت نشد'}`);
+                    }
+                    userProfile = retryData;
+                } else {
+                    userProfile = data;
                 }
                 
-                if (data) {
-                    userProfile = data;
-                    authPage.classList.remove('active');
-                    appContainer.classList.remove('hidden');
-                    await setupUIForRole(userProfile.role);
-                } else {
-                    throw new Error('پروفایل کاربر یافت نشد.');
-                }
+                authPage.classList.remove('active');
+                appContainer.classList.remove('hidden');
+                await setupUIForRole(userProfile.role);
                 hideLoading();
+
             } else { // User is logged out or no session
                 currentUser = null;
                 userProfile = null;
@@ -613,24 +669,37 @@
         
         const { data: lastAppointment, error: lastAptError } = await db
             .from('appointments')
-            .select('therapist:therapist_id ( id, full_name )')
+            .select('status, therapist:therapist_id ( id, full_name, avatar_url )')
             .eq('client_id', currentUser.id)
+            .in('status', ['confirmed', 'completed'])
             .order('created_at', { ascending: false })
             .limit(1)
             .single();
 
         let therapistCardHTML = '';
         if (lastAppointment && lastAppointment.therapist) {
-            therapistCardHTML = `
-            <div class="bg-white p-4 rounded-2xl shadow-md flex items-center justify-between">
-                <div>
-                    <p class="text-sm text-gray-500">روانشناس شما</p>
-                    <p class="font-bold text-lg">دکتر ${lastAppointment.therapist.full_name}</p>
-                </div>
+            const chatButton = lastAppointment.status === 'confirmed' ? `
                 <button onclick="startChatWith('${lastAppointment.therapist.id}')" class="bg-teal-500 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2">
                     <i data-lucide="message-circle"></i>
                     <span>چت</span>
                 </button>
+            ` : `
+                <button class="bg-gray-300 text-gray-600 px-4 py-2 rounded-lg font-semibold cursor-not-allowed flex items-center gap-2">
+                    <i data-lucide="message-circle-off"></i>
+                    <span>پایان یافته</span>
+                </button>
+            `;
+
+            therapistCardHTML = `
+            <div class="bg-white p-4 rounded-2xl shadow-md flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-full overflow-hidden" id="dashboard-therapist-avatar"></div>
+                    <div>
+                        <p class="text-sm text-gray-500">روانشناس شما</p>
+                        <p class="font-bold text-lg">${lastAppointment.therapist.full_name}</p>
+                    </div>
+                </div>
+                ${chatButton}
             </div>
             `;
         } else {
@@ -650,9 +719,7 @@
                         <h1 class="text-2xl font-bold text-gray-800">سلام، ${userProfile.full_name.split(' ')[0]}!</h1>
                         <p class="text-gray-500">حالت امروز چطوره؟</p>
                     </div>
-                    <button onclick="navigateTo('client-profile-page')" class="w-12 h-12 rounded-full bg-teal-500 text-white flex items-center justify-center text-xl font-bold">
-                        ${userProfile.full_name.charAt(0)}
-                    </button>
+                    <button onclick="navigateTo('client-profile-page')" id="dashboard-profile-avatar" class="w-14 h-14 rounded-full overflow-hidden"></button>
                 </div>
 
                 ${therapistCardHTML}
@@ -703,6 +770,12 @@
                 </div>
             </div>
         `;
+        
+        renderAvatar(document.getElementById('dashboard-profile-avatar'), userProfile.avatar_url);
+        if (lastAppointment && lastAppointment.therapist) {
+            renderAvatar(document.getElementById('dashboard-therapist-avatar'), lastAppointment.therapist.avatar_url, { bgColor: 'bg-gray-200', iconColor: 'text-gray-600'});
+        }
+
         await calculateAndDisplayHealthScore();
         await loadMoodChart();
         await loadJournalEntries();
@@ -827,7 +900,7 @@
         });
     };
 
-    // --- Journal Functions (NEW and UPDATED) ---
+    // --- Journal Functions ---
     const submitJournal = async () => {
         const content = document.getElementById('journal-input').value;
         if (!content.trim()) {
@@ -872,7 +945,7 @@
 
         historyContainer.innerHTML = data.map(entry => `
             <div class="bg-gray-50 p-3 rounded-lg border" id="journal-entry-${entry.id}">
-                <p class="text-xs text-gray-500 mb-2">${new persianDate(new Date(entry.created_at)).format('dddd D MMMM YYYY - HH:mm')}</p>
+                <p class="text-xs text-gray-500 mb-2">${new persianDate(new Date(entry.created_at)).format('dddd D MMMM HH:mm')}</p>
                 <p class="text-gray-700 whitespace-pre-wrap">${entry.content}</p>
                 <div class="flex justify-end gap-2 mt-2">
                     <button onclick="editJournalEntry(${entry.id})" class="p-1 text-blue-600 hover:text-blue-800"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
@@ -1111,26 +1184,26 @@
         `;
     };
 
-    // --- CLIENT: APPOINTMENTS ---
+    // --- CLIENT: APPOINTMENTS (REWORKED) ---
     const renderClientAppointments = async () => {
         const page = document.getElementById('client-appointments-page');
         showLoading();
         page.innerHTML = `
             <div>
-                <h1 class="text-2xl font-bold text-gray-800 mb-6">نوبت‌های من و رزرو جدید</h1>
+                <h1 class="text-2xl font-bold text-gray-800 mb-6">نوبت‌های من</h1>
                 <div id="appointments-list" class="space-y-4">
                     <p class="text-center text-gray-500">در حال بارگذاری نوبت‌ها...</p>
                 </div>
                 <div class="mt-8">
                     <h2 class="text-xl font-bold text-gray-800 mb-4">رزرو نوبت جدید</h2>
-                    <div id="therapist-booking-section" class="bg-white p-4 rounded-2xl shadow-md space-y-4">
+                    <div id="therapist-list-container" class="space-y-4">
                         <p class="text-center text-gray-500">در حال بارگذاری لیست روانشناسان...</p>
                     </div>
                 </div>
             </div>
         `;
         await loadClientAppointments();
-        await loadTherapistsForBooking();
+        await renderTherapistListForBooking();
         hideLoading();
         lucide.createIcons();
     };
@@ -1139,9 +1212,15 @@
         const listEl = document.getElementById('appointments-list');
         const { data, error } = await db
             .from('appointments')
-            .select(`id, appointment_time, status, therapist:therapist_id ( id, full_name )`)
+            .select(`
+                id,
+                status,
+                type,
+                therapist:therapist_id ( id, full_name, avatar_url ),
+                slot:slot_id ( start_time )
+            `)
             .eq('client_id', currentUser.id)
-            .order('appointment_time', { ascending: false });
+            .order('created_at', { ascending: false });
 
         if (error) {
             console.error("Error loading appointments:", error);
@@ -1153,135 +1232,296 @@
             listEl.innerHTML = `<p class="text-center text-gray-500 p-4 bg-gray-100 rounded-lg">شما هیچ نوبت رزرو شده‌ای ندارید.</p>`;
             return;
         }
+        
+        const statusMap = {
+            pending: { text: 'در انتظار تایید', color: 'bg-yellow-100 text-yellow-800' },
+            confirmed: { text: 'تایید شده', color: 'bg-blue-100 text-blue-800' },
+            completed: { text: 'پایان یافته', color: 'bg-green-100 text-green-800' },
+            cancelled: { text: 'لغو شده', color: 'bg-gray-100 text-gray-800' },
+            declined: { text: 'رد شده', color: 'bg-red-100 text-red-800' }
+        };
 
         listEl.innerHTML = data.map(apt => {
-            if (!apt.therapist) {
-                return ''; 
+            const container = document.createElement('div');
+            container.className = 'bg-white p-4 rounded-2xl shadow-md';
+            if (!apt.therapist || !apt.slot) return '';
+            
+            const statusInfo = statusMap[apt.status] || statusMap.cancelled;
+            const appointmentTime = apt.slot.start_time; // Already a formatted string
+            const typeText = apt.type === 'in_person' ? 'جلسه حضوری' : 'مکالمه چت';
+            const typeColor = apt.type === 'in_person' ? 'text-teal-700' : 'text-sky-700';
+
+            let actionButtons = '';
+            if (apt.status === 'confirmed') {
+                actionButtons = `<button onclick="startChatWith('${apt.therapist.id}')" class="flex-1 bg-teal-500 text-white py-2 rounded-lg text-sm">ارتباط با روانشناس</button>`;
             }
-            return `
-            <div class="bg-white p-4 rounded-2xl shadow-md">
+            if (apt.status === 'pending' || apt.status === 'confirmed') {
+                actionButtons += `<button onclick="cancelAppointment(${apt.id}, ${apt.slot_id})" class="flex-1 bg-red-100 text-red-700 py-2 rounded-lg text-sm">لغو نوبت</button>`;
+            }
+            if (apt.status === 'completed') {
+                actionButtons = `<button onclick="showRatingModal(${apt.id}, '${apt.therapist.id}')" class="flex-1 bg-amber-500 text-white py-2 rounded-lg text-sm">ثبت امتیاز و نظر</button>`;
+            }
+
+            container.innerHTML = `
                 <div class="flex justify-between items-start">
-                    <div>
-                        <p class="font-bold text-lg">دکتر ${apt.therapist.full_name}</p>
-                        <p class="text-sm text-gray-600">${new persianDate(new Date(apt.appointment_time)).format('dddd D MMMM - ساعت HH:mm')}</p>
-                        <p class="text-xs font-semibold text-teal-700 mt-1">جلسه حضوری</p>
+                    <div class="flex items-center gap-3">
+                         <div class="w-12 h-12 rounded-full overflow-hidden" id="apt-therapist-avatar-${apt.id}"></div>
+                        <div>
+                            <p class="font-bold text-lg">${apt.therapist.full_name}</p>
+                            <p class="text-sm text-gray-600">${appointmentTime}</p>
+                            <p class="text-xs font-semibold ${typeColor} mt-1">${typeText}</p>
+                        </div>
                     </div>
-                    <span class="text-sm font-semibold px-3 py-1 rounded-full ${apt.status === 'booked' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}">${apt.status === 'booked' ? 'رزرو شده' : 'لغو شده'}</span>
+                    <span class="text-xs font-semibold px-2 py-1 rounded-full ${statusInfo.color}">${statusInfo.text}</span>
                 </div>
-                <div class="mt-4 flex gap-2">
-                    <button onclick="startChatWith('${apt.therapist.id}')" class="flex-1 bg-teal-500 text-white py-2 rounded-lg text-sm">ارتباط با روانشناس</button>
-                    ${apt.status === 'booked' ? `<button onclick="cancelAppointment(${apt.id})" class="flex-1 bg-red-100 text-red-700 py-2 rounded-lg text-sm">لغو نوبت</button>` : ''}
-                </div>
-            </div>
-        `}).join('');
+                ${actionButtons ? `<div class="mt-4 flex gap-2">${actionButtons}</div>` : ''}
+            `;
+            
+            setTimeout(() => {
+                const avatarEl = document.getElementById(`apt-therapist-avatar-${apt.id}`);
+                if (avatarEl) {
+                    renderAvatar(avatarEl, apt.therapist.avatar_url, { bgColor: 'bg-gray-200', iconColor: 'text-gray-600'});
+                }
+            }, 0);
+
+            return container.outerHTML;
+        }).join('');
+        lucide.createIcons();
     };
     
-    const loadTherapistsForBooking = async () => {
-        const sectionEl = document.getElementById('therapist-booking-section');
-        const { data, error } = await db.from('profiles').select('id, full_name').eq('role', 'therapist');
+    const renderTherapistListForBooking = async () => {
+        const container = document.getElementById('therapist-list-container');
+        const { data, error } = await db.from('profiles').select('*').eq('role', 'therapist');
 
         if (error) {
-            sectionEl.innerHTML = `<p class="text-red-500">خطا در بارگذاری لیست روانشناسان.</p>`;
+            container.innerHTML = `<p class="text-red-500">خطا در بارگذاری لیست روانشناسان.</p>`;
             return;
         }
         
-        sectionEl.innerHTML = `
-            <div>
-                <label for="therapist-select" class="block text-sm font-medium text-gray-700">انتخاب روانشناس</label>
-                <select id="therapist-select" class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500">
-                    ${data.map(t => `<option value="${t.id}">دکتر ${t.full_name}</option>`).join('')}
-                </select>
+        if (data.length === 0) {
+            container.innerHTML = `<p class="text-center text-gray-500">در حال حاضر هیچ روانشناسی فعال نیست.</p>`;
+            return;
+        }
+
+        container.innerHTML = data.map(t => `
+            <div class="bg-white p-4 rounded-2xl shadow-md flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="w-16 h-16 rounded-full overflow-hidden" id="therapist-list-avatar-${t.id}"></div>
+                    <div>
+                        <h3 class="font-bold text-lg">${t.full_name}</h3>
+                        <p class="text-sm text-gray-500">${t.specialization || 'تخصص نامشخص'}</p>
+                        ${renderStars(t.average_rating || 0, t.total_ratings || 0)}
+                    </div>
+                </div>
+                <button onclick="showAvailableSlots('${t.id}')" class="bg-teal-500 text-white px-4 py-2 rounded-lg font-semibold">انتخاب</button>
             </div>
-            <div>
-                <label for="appointment-date" class="block text-sm font-medium text-gray-700">انتخاب تاریخ و ساعت</label>
-                <input type="text" id="appointment-date" readonly class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm bg-white cursor-pointer" placeholder="برای انتخاب تاریخ کلیک کنید">
-                <p class="text-xs text-gray-500 mt-1">توجه: تمام نوبت‌ها برای مراجعه حضوری هستند.</p>
-            </div>
-            <button onclick="bookAppointment()" class="w-full bg-teal-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-600 transition">رزرو نهایی</button>
-        `;
-        
-        $('#appointment-date').persianDatepicker({
-            format: 'YYYY/MM/DD HH:mm',
-            timePicker: { enabled: true },
-            minDate: new persianDate(),
-            observer: true,
-            autoClose: true,
-            onSelect: function(unix) {
-                selectedAppointmentTimestamp = unix;
+        `).join('');
+
+        data.forEach(t => {
+            const avatarEl = document.getElementById(`therapist-list-avatar-${t.id}`);
+            if (avatarEl) {
+                renderAvatar(avatarEl, t.avatar_url, { bgColor: 'bg-gray-200', iconColor: 'text-gray-600'});
             }
         });
+
+        lucide.createIcons();
+    };
+
+    const showAvailableSlots = async (therapistId) => {
+        showLoading();
+        const { data: slots, error } = await db
+            .from('available_slots')
+            .select('*')
+            .eq('therapist_id', therapistId)
+            .eq('is_booked', false)
+            .order('start_time', { ascending: true });
+        
+        const { data: therapist, error: tError } = await db.from('profiles').select('full_name').eq('id', therapistId).single();
+        hideLoading();
+
+        if (error || tError) {
+            showToast('خطا در دریافت زمان‌های خالی.', 'error');
+            console.error(error || tError);
+            return;
+        }
+
+        let content = '<p class="text-center text-gray-500">متاسفانه این روانشناس زمان خالی ندارد.</p>';
+        if (slots.length > 0) {
+            content = `
+                <div class="space-y-2">
+                    ${slots.map(slot => {
+                        const time = slot.start_time; // Already a formatted string
+                        const typeText = slot.type === 'in_person' ? 'حضوری' : 'چت';
+                        return `
+                        <label class="flex justify-between items-center p-3 border rounded-lg cursor-pointer has-[:checked]:bg-teal-50 has-[:checked]:border-teal-500">
+                            <div>
+                                <p class="font-semibold">${time}</p>
+                                <p class="text-sm text-gray-600">نوع جلسه: ${typeText}</p>
+                            </div>
+                            <input type="radio" name="slot" value="${slot.id}" data-type="${slot.type}" class="form-radio text-teal-600">
+                        </label>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        const actions = [{
+            text: 'رزرو نهایی',
+            className: 'px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600',
+            handler: `bookAppointment()`
+        }];
+
+        showModal(`انتخاب زمان برای ${therapist.full_name}`, content, actions);
     };
 
     const bookAppointment = async () => {
-        const therapistId = document.getElementById('therapist-select').value;
-        
-        if (!selectedAppointmentTimestamp) {
-            showToast('لطفاً تاریخ و ساعت را انتخاب کنید.', 'error');
+        const selectedSlot = document.querySelector('input[name="slot"]:checked');
+        if (!selectedSlot) {
+            showToast('لطفاً یک زمان را انتخاب کنید.', 'error');
             return;
         }
+
+        const slotId = selectedSlot.value;
         
-        const appointmentTime = new Date(selectedAppointmentTimestamp).toISOString();
-        
+        closeModal();
         showLoading();
-        const { error } = await db.from('appointments').insert({
-            client_id: currentUser.id,
-            therapist_id: therapistId,
-            appointment_time: appointmentTime
+
+        const { data, error } = await db.rpc('book_appointment_slot', {
+            slot_id_arg: slotId
         });
+
         hideLoading();
 
         if (error) {
-            if (error.code === '23505') { 
-                 showToast('این زمان قبلا رزرو شده است. لطفاً زمان دیگری را انتخاب کنید.', 'error');
+            if (error.message.includes('SLOT_ALREADY_BOOKED')) {
+                showToast('متاسفانه این زمان به تازگی رزرو شده است. لطفاً صفحه را رفرش کنید.', 'error');
+            } else if (error.message.includes('SLOT_NOT_FOUND')) {
+                showToast('زمان انتخاب شده یافت نشد.', 'error');
             } else {
-                 showToast('خطا در رزرو نوبت. لطفاً دوباره تلاش کنید.', 'error');
+                showToast('خطا در ایجاد نوبت. لطفاً دوباره تلاش کنید.', 'error');
+                console.error('RPC Error:', error);
             }
-            console.error("Booking Error:", error);
-        } else {
-            showToast('نوبت شما با موفقیت رزرو شد.', 'success');
-            selectedAppointmentTimestamp = null; 
+        } else if (data && data.success) {
+            showToast('درخواست نوبت شما ثبت شد و منتظر تایید روانشناس است.', 'success');
             await renderClientAppointments();
-            await renderClientDashboard(); 
+            await renderClientDashboard();
+        } else {
+             showToast(data?.message || 'خطای نامشخصی رخ داد.', 'error');
         }
     };
     
-    const cancelAppointment = async (id) => {
+    const cancelAppointment = async (id, slotId) => {
         showLoading();
-        const { error } = await db.from('appointments').update({ status: 'cancelled' }).eq('id', id);
-        hideLoading();
-        if(error) {
+        const { error: apptError } = await db.from('appointments').update({ status: 'cancelled' }).eq('id', id);
+        if (apptError) {
+            hideLoading();
             showToast('خطا در لغو نوبت.', 'error');
+            return;
+        }
+        
+        const { error: slotError } = await db.from('available_slots').update({ is_booked: false }).eq('id', slotId);
+        hideLoading();
+        
+        if(slotError) {
+            showToast('نوبت لغو شد، اما در آزاد کردن زمان خطایی رخ داد.', 'info');
         } else {
             showToast('نوبت با موفقیت لغو شد.', 'success');
+        }
+        await loadClientAppointments();
+    };
+    
+    const showRatingModal = (appointmentId, therapistId) => {
+        let currentRating = 0;
+        const content = `
+            <p class="mb-4">لطفا به جلسه خود با روانشناس امتیاز دهید و نظر خود را بنویسید.</p>
+            <div id="modal-star-rating" class="star-rating flex justify-center text-4xl mb-4">
+                ${[1,2,3,4,5].map(i => `<i data-lucide="star" data-value="${i}" class="star"></i>`).join('')}
+            </div>
+            <textarea id="rating-comment" class="w-full h-24 p-2 border rounded-lg" placeholder="نظر خود را اینجا بنویسید..."></textarea>
+        `;
+        const actions = [{
+            text: 'ثبت نظر',
+            className: 'px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600',
+            handler: `submitReview(${appointmentId}, '${therapistId}')`
+        }];
+        showModal('امتیازدهی به جلسه', content, actions);
+        lucide.createIcons();
+
+        const stars = document.querySelectorAll('#modal-star-rating .star');
+        stars.forEach(star => {
+            star.addEventListener('click', () => {
+                currentRating = star.dataset.value;
+                window.currentRating = currentRating; // Make it accessible to submitReview
+                stars.forEach(s => {
+                    s.classList.toggle('selected', s.dataset.value <= currentRating);
+                });
+            });
+        });
+    };
+
+    const submitReview = async (appointmentId, therapistId) => {
+        const rating = window.currentRating;
+        const comment = document.getElementById('rating-comment').value;
+
+        if (!rating || rating === 0) {
+            showToast('لطفا ابتدا یک امتیاز (ستاره) را انتخاب کنید.', 'error');
+            return;
+        }
+        
+        closeModal();
+        showLoading();
+
+        const { error } = await db.from('reviews').insert({
+            appointment_id: appointmentId,
+            client_id: currentUser.id,
+            therapist_id: therapistId,
+            rating: rating,
+            comment: comment
+        });
+
+        if (error) {
+            hideLoading();
+            showToast('خطا در ثبت نظر. شاید قبلا نظر خود را ثبت کرده باشید.', 'error');
+            console.error(error);
+        } else {
+            const { error: rpcError } = await db.rpc('update_therapist_rating', { therapist_id_arg: therapistId });
+            hideLoading();
+            if (rpcError) {
+                 showToast('نظر شما ثبت شد اما در به‌روزرسانی امتیاز مشکلی پیش آمد.', 'info');
+                 console.error("RPC Error:", rpcError);
+            } else {
+                 showToast('نظر و امتیاز شما با موفقیت ثبت شد.', 'success');
+            }
             await loadClientAppointments();
         }
     };
 
+
     // --- CLIENT: PROFILE ---
     const renderClientProfile = async () => {
         const page = document.getElementById('client-profile-page');
-        page.classList.add('bg-gradient-to-b', 'from-teal-400', 'to-blue-500');
-
         page.innerHTML = `
             <div class="p-4 space-y-6">
-                <div onclick="openProfileEditor()" class="bg-white/90 backdrop-blur-sm p-4 rounded-2xl shadow-lg flex items-center justify-between cursor-pointer active:bg-gray-100 transition-colors">
-                    <div class="flex items-center gap-4">
-                        <div class="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center">
-                            <i data-lucide="user" class="w-8 h-8 text-teal-600"></i>
-                        </div>
-                        <div>
-                            <p class="font-bold text-gray-800">اطلاعات کاربری</p>
-                            <p class="text-sm text-gray-500">${userProfile.full_name || 'کاربر مهمان'}</p>
-                        </div>
+                 <div class="flex flex-col items-center space-y-4">
+                    <div class="relative w-24 h-24">
+                        <div id="profile-page-avatar" class="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg"></div>
+                        <label for="avatar-upload" class="absolute bottom-0 right-0 bg-white p-1.5 rounded-full shadow-md cursor-pointer">
+                            <i data-lucide="camera" class="w-5 h-5 text-gray-600"></i>
+                            <input id="avatar-upload" type="file" class="hidden" accept="image/*" onchange="uploadProfilePicture(event)">
+                        </label>
                     </div>
-                    <i data-lucide="chevron-left" class="text-gray-400"></i>
+                    <div class="text-center">
+                        <h1 class="text-2xl font-bold text-gray-800">${userProfile.full_name}</h1>
+                        <p class="text-gray-500">${currentUser.email}</p>
+                    </div>
                 </div>
 
                 <div class="bg-white p-2 rounded-2xl shadow-md">
-                    <a href="#" onclick="showWallet()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
+                    <a href="#" onclick="openProfileEditor()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
                         <div class="flex items-center gap-4">
-                            <i data-lucide="wallet" class="text-gray-600"></i>
-                            <span class="font-semibold text-gray-700">اعتبار کیف پول</span>
+                            <i data-lucide="edit" class="text-gray-600"></i>
+                            <span class="font-semibold text-gray-700">ویرایش اطلاعات کاربری</span>
                         </div>
                         <i data-lucide="chevron-left" class="text-gray-400"></i>
                     </a>
@@ -1299,40 +1539,18 @@
                         </div>
                         <i data-lucide="chevron-left" class="text-gray-400"></i>
                     </a>
-                    <a href="#" onclick="showFaq()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
-                        <div class="flex items-center gap-4">
-                            <i data-lucide="help-circle" class="text-gray-600"></i>
-                            <span class="font-semibold text-gray-700">سوالات متداول</span>
-                        </div>
-                        <i data-lucide="chevron-left" class="text-gray-400"></i>
-                    </a>
-                    <a href="#" onclick="showAboutUs()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
-                        <div class="flex items-center gap-4">
-                            <i data-lucide="info" class="text-gray-600"></i>
-                            <span class="font-semibold text-gray-700">درباره ما</span>
-                        </div>
-                        <i data-lucide="chevron-left" class="text-gray-400"></i>
-                    </a>
-                    <a href="#" onclick="showTerms()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
-                        <div class="flex items-center gap-4">
-                            <i data-lucide="file-text" class="text-gray-600"></i>
-                            <span class="font-semibold text-gray-700">قوانین و مقررات</span>
-                        </div>
-                        <i data-lucide="chevron-left" class="text-gray-400"></i>
-                    </a>
-                    <div class="border-t my-1 mx-2"></div>
+                     <div class="border-t my-1 mx-2"></div>
                     <a href="#" onclick="handleLogout()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg text-red-500">
                         <div class="flex items-center gap-4">
                             <i data-lucide="log-out"></i>
                             <span class="font-semibold">خروج</span>
                         </div>
-                        <i data-lucide="chevron-left" class="text-gray-400"></i>
                     </a>
                 </div>
-
-                <p class="text-center text-white/70 text-sm">نسخه ۱.۰.۴</p>
+                <p class="text-center text-gray-400 text-sm">نسخه ۱.۵.۰</p>
             </div>
         `;
+        renderAvatar(document.getElementById('profile-page-avatar'), userProfile.avatar_url);
         lucide.createIcons();
     };
     
@@ -1374,8 +1592,40 @@
         };
     };
 
-    const showWallet = () => {
-        showModal('اعتبار کیف پول', '<p>این قابلیت به زودی اضافه خواهد شد. اعتبار فعلی شما: ۰ تومان</p>');
+    const uploadProfilePicture = async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        showLoading();
+        const fileName = `${currentUser.id}/${Date.now()}-${file.name}`;
+        
+        if (userProfile.avatar_url) {
+            const oldAvatarPath = userProfile.avatar_url.split('/avatars/')[1];
+            if (oldAvatarPath) {
+                await db.storage.from('avatars').remove([oldAvatarPath]);
+            }
+        }
+
+        const { error: uploadError } = await db.storage.from('avatars').upload(fileName, file);
+        if (uploadError) {
+            hideLoading();
+            showToast('خطا در آپلود تصویر.', 'error');
+            console.error(uploadError);
+            return;
+        }
+
+        const { data: urlData } = db.storage.from('avatars').getPublicUrl(fileName);
+        const { error: updateError } = await db.from('profiles').update({ avatar_url: urlData.publicUrl }).eq('id', currentUser.id);
+        
+        hideLoading();
+        if (updateError) {
+            showToast('خطا در ذخیره آدرس تصویر.', 'error');
+        } else {
+            userProfile.avatar_url = urlData.publicUrl;
+            showToast('عکس پروفایل با موفقیت به‌روزرسانی شد.', 'success');
+            if (userProfile.role === 'client') await renderClientProfile();
+            if (userProfile.role === 'therapist') await renderTherapistProfile();
+        }
     };
 
     const showSupportRequest = () => {
@@ -1392,32 +1642,6 @@
             closeModal();
             showToast('درخواست شما با موفقیت ثبت شد. به زودی با شما تماس می‌گیریم.', 'success');
         });
-    };
-
-    const showFaq = () => {
-        const content = `
-            <div class="space-y-4">
-                <div>
-                    <h4 class="font-bold">چگونه می‌توانم نوبت رزرو کنم؟</h4>
-                    <p class="text-sm text-gray-600">از منوی پایین صفحه به بخش «نوبت‌ها» بروید و پس از انتخاب روانشناس، تاریخ و ساعت مورد نظر خود را ثبت کنید.</p>
-                </div>
-                <div>
-                    <h4 class="font-bold">آیا اطلاعات من محرمانه باقی می‌ماند؟</h4>
-                    <p class="text-sm text-gray-600">بله، تمام اطلاعات شما، از جمله پیام‌ها و نتایج تست‌ها، کاملاً محرمانه بوده و فقط توسط روانشناس معالج شما قابل مشاهده است.</p>
-                </div>
-            </div>
-        `;
-        showModal('سوالات متداول', content);
-    };
-
-    const showAboutUs = () => {
-        const content = '<p>ساینو یک پلتفرم جامع برای مدیریت و بهبود سلامت روان است که به شما کمک می‌کند با روانشناسان متخصص در ارتباط باشید و وضعیت روحی خود را پیگیری کنید.</p>';
-        showModal('درباره ساینو', content);
-    };
-
-    const showTerms = () => {
-        const content = '<p>استفاده از اپلیکیشن ساینو به منزله پذیرش تمام قوانین و مقررات است. این پلتفرم جایگزین درمان اورژانسی نیست. در موارد حاد، لطفاً با اورژانس اجتماعی (۱۲۳) تماس بگیرید.</p>';
-        showModal('قوانین و مقررات', content);
     };
 
     const viewTestHistory = async () => {
@@ -1460,58 +1684,107 @@
     const renderTherapistDashboard = async () => {
         const page = document.getElementById('therapist-dashboard-page');
         showLoading();
-        const { data: appointments, error: aptError } = await db
+        
+        const { data: pendingAppointments, error: pendingError } = await db
             .from('appointments')
-            .select('id, appointment_time, client:client_id(id, full_name)')
+            .select('id, type, client:client_id(id, full_name, avatar_url), slot:slot_id(start_time)', { count: 'exact' })
             .eq('therapist_id', currentUser.id)
-            .eq('status', 'booked')
-            .gte('appointment_time', new Date().toISOString())
-            .order('appointment_time', { ascending: true })
-            .limit(5);
+            .eq('status', 'pending');
 
-        const { count: clientCount, error: clientError } = await db
+        const { data: upcomingAppointments, error: upcomingError } = await db
             .from('appointments')
-            .select('client_id', { count: 'exact', head: true })
-            .eq('therapist_id', currentUser.id);
-            
+            .select('id, client:client_id(id, full_name), slot:slot_id(start_time)')
+            .eq('therapist_id', currentUser.id)
+            .eq('status', 'confirmed');
+
+        const { data: clients, error: clientError } = await db.rpc('get_unique_clients_for_therapist', { therapist_id_arg: currentUser.id });
+        
         hideLoading();
 
         page.innerHTML = `
             <div class="space-y-6">
                 <h1 class="text-2xl font-bold text-gray-800">داشبورد دکتر ${userProfile.full_name.split(' ').slice(1).join(' ') || userProfile.full_name}</h1>
                 
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-3 gap-4">
                     <div class="bg-white p-4 rounded-2xl shadow-md text-center">
-                        <p class="text-3xl font-bold text-teal-600">${appointments?.length || 0}</p>
-                        <p class="text-gray-500">نوبت آینده</p>
+                        <p class="text-3xl font-bold text-yellow-600">${pendingAppointments?.length || 0}</p>
+                        <p class="text-gray-500 text-sm">درخواست جدید</p>
                     </div>
                     <div class="bg-white p-4 rounded-2xl shadow-md text-center">
-                        <p class="text-3xl font-bold text-blue-600">${clientCount || 0}</p>
-                        <p class="text-gray-500">تعداد مراجعین</p>
+                        <p class="text-3xl font-bold text-teal-600">${upcomingAppointments?.length || 0}</p>
+                        <p class="text-gray-500 text-sm">نوبت آینده</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl shadow-md text-center">
+                        <p class="text-3xl font-bold text-blue-600">${clients?.length || 0}</p>
+                        <p class="text-gray-500 text-sm">کل مراجعین</p>
                     </div>
                 </div>
 
                 <div class="bg-white p-4 rounded-2xl shadow-md">
-                    <h2 class="font-bold text-lg mb-3">نوبت‌های پیش رو</h2>
-                    <div class="space-y-3">
-                        ${aptError ? '<p class="text-red-500">خطا در بارگذاری</p>' : ''}
-                        ${appointments && appointments.length > 0 ? appointments.map(apt => `
-                            <div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg">
-                                <div>
-                                    <p class="font-semibold">${apt.client.full_name}</p>
-                                    <p class="text-sm text-gray-500">${new persianDate(new Date(apt.appointment_time)).format('dddd D MMMM - HH:mm')}</p>
-                                </div>
-                                <button onclick="startChatWith('${apt.client.id}')" class="text-teal-600"><i data-lucide="message-square"></i></button>
-                            </div>
-                        `).join('') : '<p class="text-center text-gray-500">نوبت نزدیکی ندارید.</p>'}
+                    <h2 class="font-bold text-lg mb-3">درخواست‌های نوبت جدید</h2>
+                    <div id="pending-appointments-list" class="space-y-3">
+                        <!-- Content will be rendered here -->
                     </div>
                 </div>
             </div>
         `;
+        
+        const pendingListEl = document.getElementById('pending-appointments-list');
+        if (pendingError) {
+            pendingListEl.innerHTML = '<p class="text-red-500">خطا در بارگذاری</p>';
+        } else if (pendingAppointments && pendingAppointments.length > 0) {
+            pendingListEl.innerHTML = pendingAppointments.map(apt => `
+                <div class="bg-gray-50 p-3 rounded-lg">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full overflow-hidden" id="pending-apt-avatar-${apt.id}"></div>
+                            <div>
+                                <p class="font-semibold">${apt.client.full_name}</p>
+                                <p class="text-sm text-gray-500">${apt.slot.start_time} (${apt.type === 'in_person' ? 'حضوری' : 'چت'})</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="handleAppointmentConfirmation(${apt.id}, true, ${apt.slot_id})" class="p-2 bg-green-100 rounded-lg text-green-600"><i data-lucide="check"></i></button>
+                            <button onclick="handleAppointmentConfirmation(${apt.id}, false, ${apt.slot_id})" class="p-2 bg-red-100 rounded-lg text-red-600"><i data-lucide="x"></i></button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            pendingAppointments.forEach(apt => {
+                 const avatarEl = document.getElementById(`pending-apt-avatar-${apt.id}`);
+                 if(avatarEl) renderAvatar(avatarEl, apt.client.avatar_url, { bgColor: 'bg-gray-200', iconColor: 'text-gray-600'});
+            });
+
+        } else {
+            pendingListEl.innerHTML = '<p class="text-center text-gray-500">درخواست جدیدی ندارید.</p>';
+        }
+
         lucide.createIcons();
     };
 
-    // --- THERAPIST: CLIENTS (FIXED) ---
+    const handleAppointmentConfirmation = async (appointmentId, isConfirmed, slotId) => {
+        showLoading();
+        const newStatus = isConfirmed ? 'confirmed' : 'declined';
+        const { error: updateError } = await db.from('appointments').update({ status: newStatus }).eq('id', appointmentId);
+
+        if (updateError) {
+            hideLoading();
+            showToast('خطا در پردازش درخواست.', 'error');
+            return;
+        }
+
+        if (!isConfirmed) {
+            await db.from('available_slots').update({ is_booked: false }).eq('id', slotId);
+        }
+        
+        hideLoading();
+        showToast(`نوبت با موفقیت ${isConfirmed ? 'تایید' : 'رد'} شد.`, 'success');
+        await renderTherapistDashboard();
+    };
+
+
+    // --- THERAPIST: CLIENTS ---
     const renderTherapistClients = async () => {
         const page = document.getElementById('therapist-clients-page');
         showLoading();
@@ -1524,29 +1797,20 @@
             </div>`;
 
         try {
-            const { data: appointments, error: aptError } = await db
-                .from('appointments')
-                .select('client_id')
-                .eq('therapist_id', currentUser.id);
+            const { data: clients, error: rpcError } = await db.rpc('get_unique_clients_for_therapist', { therapist_id_arg: currentUser.id });
 
-            if (aptError) throw aptError;
-
-            const clientIds = [...new Set(appointments.map(apt => apt.client_id).filter(id => id))];
+            if (rpcError) throw rpcError;
 
             let clientsHTML = '';
-            if (clientIds.length > 0) {
-                const { data: clients, error: clientsError } = await db
-                    .from('profiles')
-                    .select('id, full_name, email')
-                    .in('id', clientIds);
-
-                if (clientsError) throw clientsError;
-
+            if (clients && clients.length > 0) {
                 clientsHTML = clients.map(client => `
                     <div class="bg-white p-4 rounded-2xl shadow-md flex justify-between items-center">
-                        <div>
-                            <p class="font-bold">${client.full_name}</p>
-                            <p class="text-sm text-gray-500">${client.email}</p>
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-full overflow-hidden" id="client-list-avatar-${client.id}"></div>
+                            <div>
+                                <p class="font-bold">${client.full_name}</p>
+                                <p class="text-sm text-gray-500">${client.email}</p>
+                            </div>
                         </div>
                         <div class="flex gap-2">
                             <button onclick="viewClientDetails('${client.id}')" class="p-2 bg-gray-100 rounded-lg text-gray-600"><i data-lucide="eye"></i></button>
@@ -1554,10 +1818,14 @@
                         </div>
                     </div>
                 `).join('');
+                 document.getElementById('client-list-container').innerHTML = clientsHTML;
+                 clients.forEach(client => {
+                    const avatarEl = document.getElementById(`client-list-avatar-${client.id}`);
+                    if (avatarEl) renderAvatar(avatarEl, client.avatar_url, { bgColor: 'bg-gray-200', iconColor: 'text-gray-600'});
+                 });
             } else {
-                clientsHTML = '<p class="text-center text-gray-500">شما هیچ مراجعه‌کننده‌ای ندارید.</p>';
+                document.getElementById('client-list-container').innerHTML = '<p class="text-center text-gray-500">شما هیچ مراجعه‌کننده‌ای ندارید.</p>';
             }
-            document.getElementById('client-list-container').innerHTML = clientsHTML;
         } catch (error) {
             console.error("Error loading clients:", error);
             document.getElementById('client-list-container').innerHTML = `<p class="text-red-500 text-center">خطا در بارگذاری لیست مراجعین.</p>`;
@@ -1570,97 +1838,196 @@
 
     const viewClientDetails = async (clientId) => {
         showLoading();
-        const { data: profile, error: pError } = await db.from('profiles').select('full_name, bio').eq('id', clientId).single();
-        const { data: moods, error: mError } = await db.from('mood_entries').select('mood_score, created_at').eq('user_id', clientId).order('created_at', {ascending: false}).limit(7);
-        const { data: tests, error: tError } = await db.from('test_results').select('*').eq('user_id', clientId).order('created_at', {ascending: false}).limit(5);
-        hideLoading();
+        try {
+            const { data: profile, error: pError } = await db.from('profiles').select('full_name, bio').eq('id', clientId).single();
+            if (pError) throw pError;
 
-        let content = `<div class="space-y-4">`;
-        
-        if (pError) {
-            content += `<p class="text-red-500">خطا در دریافت اطلاعات مراجع.</p>`;
-        } else {
-            content += `
+            const { data: moods, error: mError } = await db.from('mood_entries').select('mood_score, created_at').eq('user_id', clientId).order('created_at', {ascending: false}).limit(7);
+            if (mError) throw mError;
+            
+            const { data: tests, error: tError } = await db.from('test_results').select('*').eq('user_id', clientId).order('created_at', {ascending: false}).limit(5);
+            if (tError) throw tError;
+
+            hideLoading();
+
+            let content = `<div class="space-y-4">
                 ${profile.bio ? `<div><h4 class="font-bold text-md mb-2">بیوگرافی مراجع</h4><p class="text-sm bg-gray-100 p-2 rounded-lg">${profile.bio}</p></div>` : ''}
                 <div>
                     <h4 class="font-bold text-md mb-2">نمودار وضعیت روحی اخیر</h4>
-                    ${mError ? '<p class="text-red-500">خطا</p>' : moods.length > 0 ? `<div class="h-48"><canvas id="clientMoodChart"></canvas></div>` : '<p class="text-sm text-gray-500">داده‌ای برای نمایش وجود ندارد.</p>'}
+                    ${moods.length > 0 ? `<div class="h-48"><canvas id="clientMoodChart"></canvas></div>` : '<p class="text-sm text-gray-500">داده‌ای برای نمایش وجود ندارد.</p>'}
                 </div>
                 <div>
                     <h4 class="font-bold text-md mb-2">آخرین نتایج تست‌ها</h4>
-                    ${tError ? '<p class="text-red-500">خطا</p>' : tests.length > 0 ? `
+                    ${tests.length > 0 ? `
                         <ul class="list-disc pr-5 space-y-2 text-sm">
                             ${tests.map(t => `<li><strong>${t.test_name}:</strong> ${t.result_text} (امتیاز: ${t.score})</li>`).join('')}
                         </ul>
                     ` : '<p class="text-sm text-gray-500">نتیجه تستی ثبت نشده است.</p>'}
                 </div>
-            `;
-        }
-        content += `</div>`;
+            </div>`;
 
-        showModal(`جزئیات مراجع: ${profile?.full_name || ''}`, content);
-        
-        if(moods && moods.length > 0) {
-            const labels = moods.map(d => new persianDate(new Date(d.created_at)).format('D MMM')).reverse();
-            const scores = moods.map(d => d.mood_score).reverse();
-            const ctx = document.getElementById('clientMoodChart').getContext('2d');
+            showModal(`جزئیات مراجع: ${profile?.full_name || ''}`, content);
             
-            if (clientMoodChartInstance) clientMoodChartInstance.destroy();
+            if(moods && moods.length > 0) {
+                const labels = moods.map(d => new persianDate(new Date(d.created_at)).format('D MMM')).reverse();
+                const scores = moods.map(d => d.mood_score).reverse();
+                const canvasEl = document.getElementById('clientMoodChart');
+                if (!canvasEl) return;
+                const ctx = canvasEl.getContext('2d');
+                
+                if (clientMoodChartInstance) clientMoodChartInstance.destroy();
 
-            clientMoodChartInstance = new Chart(ctx, { 
-                type: 'bar', 
-                data: { 
-                    labels, 
-                    datasets: [{ 
-                        label: 'نمره حال', 
-                        data: scores, 
-                        backgroundColor: 'rgba(20, 184, 166, 0.5)',
-                        borderColor: 'rgb(20, 184, 166)',
-                        borderWidth: 1,
-                        borderRadius: 8,
-                    }] 
-                }, 
-                options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false,
-                    scales: { y: { beginAtZero: true, max: 5 } },
-                    plugins: { legend: { display: false } }
-                } 
-            });
+                clientMoodChartInstance = new Chart(ctx, { 
+                    type: 'bar', 
+                    data: { 
+                        labels, 
+                        datasets: [{ 
+                            label: 'نمره حال', 
+                            data: scores, 
+                            backgroundColor: 'rgba(20, 184, 166, 0.5)',
+                            borderColor: 'rgb(20, 184, 166)',
+                            borderWidth: 1,
+                            borderRadius: 8,
+                        }] 
+                    }, 
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false,
+                        scales: { y: { beginAtZero: true, max: 5 } },
+                        plugins: { legend: { display: false } }
+                    } 
+                });
+            }
+        } catch (error) {
+            hideLoading();
+            console.error("Error in viewClientDetails:", error);
+            showToast(`خطا در بارگذاری جزئیات: ${error.message}`, 'error');
         }
     };
 
     // --- THERAPIST: SCHEDULE ---
     const renderTherapistSchedule = async () => {
         const page = document.getElementById('therapist-schedule-page');
-        showLoading();
-        const { data, error } = await db
-            .from('appointments')
-            .select('id, appointment_time, status, client:client_id(full_name)')
-            .eq('therapist_id', currentUser.id)
-            .order('appointment_time', { ascending: true });
-        hideLoading();
-
         page.innerHTML = `
             <div>
                 <h1 class="text-2xl font-bold text-gray-800 mb-6">برنامه کاری شما</h1>
-                <div class="space-y-4">
-                    ${error ? '<p class="text-red-500">خطا در بارگذاری</p>' : ''}
-                    ${data && data.length > 0 ? data.map(apt => `
-                        <div class="bg-white p-4 rounded-2xl shadow-md">
-                            <div class="flex justify-between items-start">
-                                <div>
-                                    <p class="font-bold text-lg">${apt.client ? apt.client.full_name : 'مراجع حذف شده'}</p>
-                                    <p class="text-sm text-gray-600">${new persianDate(new Date(apt.appointment_time)).format('dddd D MMMM - ساعت HH:mm')}</p>
-                                    <p class="text-xs font-semibold text-teal-700 mt-1">جلسه حضوری</p>
-                                </div>
-                                <span class="text-sm font-semibold px-3 py-1 rounded-full ${apt.status === 'booked' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}">${apt.status === 'booked' ? 'رزرو شده' : 'لغو شده'}</span>
-                            </div>
+                
+                <div class="bg-white p-4 rounded-2xl shadow-md mb-6">
+                    <h2 class="text-lg font-bold mb-4">افزودن زمان خالی جدید</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="slot-date" class="block text-sm font-medium text-gray-700">تاریخ</label>
+                            <input type="text" id="slot-date" readonly class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm bg-white cursor-pointer" placeholder="برای انتخاب تاریخ کلیک کنید">
                         </div>
-                    `).join('') : '<p class="text-center text-gray-500">هیچ نوبتی در برنامه شما ثبت نشده است.</p>'}
+                        <div>
+                            <label for="slot-time" class="block text-sm font-medium text-gray-700">ساعت شروع</label>
+                            <input type="time" id="slot-time" class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm">
+                        </div>
+                         <div>
+                            <label for="slot-type" class="block text-sm font-medium text-gray-700">نوع جلسه</label>
+                            <select id="slot-type" class="mt-1 block w-full p-2 border-gray-300 rounded-md shadow-sm">
+                                <option value="in_person">حضوری</option>
+                                <option value="chat">چت</option>
+                            </select>
+                        </div>
+                        <button onclick="addAvailableSlot()" class="w-full bg-teal-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-600 transition">افزودن زمان</button>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-2xl shadow-md">
+                    <h2 class="text-lg font-bold mb-4">زمان‌های خالی شما</h2>
+                    <div id="available-slots-list" class="space-y-2">
+                        <p class="text-center text-gray-500">در حال بارگذاری...</p>
+                    </div>
                 </div>
             </div>
         `;
+
+        $('#slot-date').persianDatepicker({
+            format: 'YYYY/MM/DD',
+            minDate: new persianDate(),
+            observer: true,
+            autoClose: true,
+        });
+
+        await loadAvailableSlots();
+        lucide.createIcons();
+    };
+    
+    const addAvailableSlot = async () => {
+        const dateStr = $('#slot-date').val();
+        const timeStr = $('#slot-time').val();
+        const type = $('#slot-type').val();
+
+        if (!dateStr || !timeStr) {
+            showToast('لطفا تاریخ و ساعت را کامل وارد کنید.', 'error');
+            return;
+        }
+
+        const startTimeString = `${dateStr} - ${timeStr}`;
+
+        showLoading();
+        const { error } = await db.from('available_slots').insert({
+            therapist_id: currentUser.id,
+            start_time: startTimeString,
+            type: type
+        });
+        hideLoading();
+
+        if (error) {
+            showToast('خطا در افزودن زمان.', 'error');
+            console.error(error);
+        } else {
+            showToast('زمان با موفقیت افزوده شد.', 'success');
+            $('#slot-date').val('');
+            $('#slot-time').val('');
+            await loadAvailableSlots();
+        }
+    };
+    
+    const loadAvailableSlots = async () => {
+        const listEl = document.getElementById('available-slots-list');
+        if (!listEl) return;
+
+        const { data, error } = await db
+            .from('available_slots')
+            .select('*')
+            .eq('therapist_id', currentUser.id)
+            .eq('is_booked', false)
+            .order('start_time', { ascending: true });
+
+        if (error) {
+            listEl.innerHTML = '<p class="text-red-500">خطا در بارگذاری.</p>';
+            return;
+        }
+
+        if (data.length === 0) {
+            listEl.innerHTML = '<p class="text-center text-gray-500">زمان خالی ثبت نشده است.</p>';
+            return;
+        }
+
+        listEl.innerHTML = data.map(slot => `
+            <div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg">
+                <div>
+                    <p class="font-semibold">${slot.start_time}</p>
+                    <p class="text-sm text-gray-600">نوع: ${slot.type === 'in_person' ? 'حضوری' : 'چت'}</p>
+                </div>
+                <button onclick="deleteAvailableSlot(${slot.id})" class="text-red-500 hover:text-red-700"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
+            </div>
+        `).join('');
+        lucide.createIcons();
+    };
+
+    const deleteAvailableSlot = async (slotId) => {
+        showLoading();
+        const { error } = await db.from('available_slots').delete().eq('id', slotId);
+        hideLoading();
+        if (error) {
+            showToast('خطا در حذف زمان.', 'error');
+        } else {
+            showToast('زمان با موفقیت حذف شد.', 'success');
+            await loadAvailableSlots();
+        }
     };
 
     // --- THERAPIST: PROFILE ---
@@ -1668,12 +2035,19 @@
         const page = document.getElementById('therapist-profile-page');
         page.innerHTML = `
             <div class="space-y-6">
-                <div class="flex flex-col items-center space-y-2">
-                    <div class="w-24 h-24 rounded-full bg-blue-500 text-white flex items-center justify-center text-4xl font-bold">
-                        ${userProfile.full_name.charAt(0)}
+                <div class="flex flex-col items-center space-y-4">
+                    <div class="relative w-24 h-24">
+                        <div id="therapist-profile-avatar" class="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg"></div>
+                        <label for="therapist-avatar-upload" class="absolute bottom-0 right-0 bg-white p-1.5 rounded-full shadow-md cursor-pointer">
+                            <i data-lucide="camera" class="w-5 h-5 text-gray-600"></i>
+                            <input id="therapist-avatar-upload" type="file" class="hidden" accept="image/*" onchange="uploadProfilePicture(event)">
+                        </label>
                     </div>
-                    <h1 class="text-2xl font-bold">دکتر ${userProfile.full_name}</h1>
-                    <p class="text-gray-500">${currentUser.email}</p>
+                    <div class="text-center">
+                        <h1 class="text-2xl font-bold">${userProfile.full_name}</h1>
+                        <p class="text-gray-500">${currentUser.email}</p>
+                        <div class="mt-2">${renderStars(userProfile.average_rating || 0, userProfile.total_ratings || 0)}</div>
+                    </div>
                 </div>
                 
                 <div class="bg-white p-4 rounded-2xl shadow-md space-y-4">
@@ -1683,12 +2057,8 @@
                         <input id="therapist-fullname-input" type="text" class="w-full p-2 border rounded-lg" value="${userProfile.full_name || ''}">
                     </div>
                      <div class="space-y-2">
-                        <label for="therapist-specialization-input" class="block text-sm font-medium text-gray-700">تخصص‌ها</label>
+                        <label for="therapist-specialization-input" class="block text-sm font-medium text-gray-700">تخصص‌ها (با کاما جدا کنید)</label>
                         <input id="therapist-specialization-input" type="text" class="w-full p-2 border rounded-lg" placeholder="مثال: CBT, روانکاوی" value="${userProfile.specialization || ''}">
-                    </div>
-                     <div class="space-y-2">
-                        <label for="therapist-experience-input" class="block text-sm font-medium text-gray-700">سال‌های تجربه</label>
-                        <input id="therapist-experience-input" type="number" class="w-full p-2 border rounded-lg" placeholder="مثال: 5" value="${userProfile.experience_years || ''}">
                     </div>
                     <div class="space-y-2">
                         <label for="therapist-bio-input" class="block text-sm font-medium text-gray-700">بیوگرافی تخصصی</label>
@@ -1697,9 +2067,16 @@
                     <button onclick="updateTherapistProfile()" class="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold">ذخیره تغییرات</button>
                 </div>
 
+                <div class="bg-white p-4 rounded-2xl shadow-md">
+                    <h2 class="text-lg font-bold mb-3">نظرات مراجعین</h2>
+                    <div id="therapist-reviews-list" class="space-y-3"></div>
+                </div>
+
                 <button onclick="handleLogout()" class="w-full bg-red-500 text-white font-bold py-3 rounded-lg hover:bg-red-600 transition">خروج از حساب</button>
             </div>
         `;
+        renderAvatar(document.getElementById('therapist-profile-avatar'), userProfile.avatar_url, { bgColor: 'bg-blue-100', iconColor: 'text-blue-600'});
+        await loadTherapistReviews();
         lucide.createIcons();
     };
 
@@ -1707,14 +2084,12 @@
         const newName = document.getElementById('therapist-fullname-input').value;
         const newBio = document.getElementById('therapist-bio-input').value;
         const newSpec = document.getElementById('therapist-specialization-input').value;
-        const newExp = document.getElementById('therapist-experience-input').value;
 
         showLoading();
         const { data, error } = await db.from('profiles').update({ 
             full_name: newName,
             bio: newBio,
             specialization: newSpec,
-            experience_years: newExp ? parseInt(newExp) : null
         }).eq('id', currentUser.id).select().single();
         hideLoading();
         
@@ -1728,21 +2103,66 @@
         }
     };
 
+    const loadTherapistReviews = async () => {
+        const listEl = document.getElementById('therapist-reviews-list');
+        if (!listEl) return;
+        listEl.innerHTML = '<p class="text-center text-gray-500">در حال بارگذاری نظرات...</p>';
+
+        const { data, error } = await db
+            .from('reviews')
+            .select('*, client:client_id(full_name)')
+            .eq('therapist_id', currentUser.id)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            listEl.innerHTML = '<p class="text-red-500">خطا در بارگذاری نظرات.</p>';
+            return;
+        }
+
+        if (data.length === 0) {
+            listEl.innerHTML = '<p class="text-center text-gray-500">هنوز نظری برای شما ثبت نشده است.</p>';
+            return;
+        }
+
+        listEl.innerHTML = data.map(review => `
+            <div class="bg-gray-50 p-3 rounded-lg border">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="font-semibold text-sm">${review.client.full_name}</span>
+                    <div class="flex items-center">
+                        <span class="text-amber-500 font-bold ml-1">${review.rating}</span>
+                        <i data-lucide="star" class="w-4 h-4 text-amber-400 fill-current"></i>
+                    </div>
+                </div>
+                <p class="text-gray-700 text-sm">${review.comment || '<i>(بدون نظر متنی)</i>'}</p>
+                <p class="text-xs text-gray-400 text-left mt-2">${new persianDate(new Date(review.created_at)).format('L')}</p>
+            </div>
+        `).join('');
+        lucide.createIcons();
+    };
+
+
     // =================================================================
-    // SHARED: CHAT PAGE (FIXED)
+    // SHARED: CHAT PAGE
     // =================================================================
     const startChatWith = async (otherUserId) => {
         const page = document.getElementById('chat-page');
-        const { data: otherUser, error } = await db.from('profiles').select('id, full_name').eq('id', otherUserId).single();
+        const { data: otherUser, error } = await db.from('profiles').select('id, full_name, avatar_url').eq('id', otherUserId).single();
         if (error) {
             showToast('کاربر مورد نظر یافت نشد.', 'error');
             return;
         }
+        
+        let therapistControls = '';
+        if (userProfile.role === 'therapist') {
+            therapistControls = `<button onclick="confirmEndChat('${otherUserId}')" class="ml-auto text-xs bg-red-500 text-white font-semibold py-1 px-3 rounded-full">پایان گفتگو</button>`;
+        }
 
         page.innerHTML = `
-            <header class="bg-white shadow-sm p-4 flex items-center gap-4 flex-shrink-0">
+            <header class="bg-white shadow-sm p-3 flex items-center gap-3 flex-shrink-0">
                 <button onclick="goBackFromChat()" class="text-gray-600"><i data-lucide="arrow-right"></i></button>
+                <div class="w-10 h-10 rounded-full overflow-hidden" id="chat-header-avatar"></div>
                 <h1 class="font-bold text-lg">${otherUser.full_name}</h1>
+                ${therapistControls}
             </header>
             <div id="chat-messages" class="flex-grow p-4 space-y-4 overflow-y-auto">
             </div>
@@ -1753,6 +2173,7 @@
                 </button>
             </footer>
         `;
+        renderAvatar(document.getElementById('chat-header-avatar'), otherUser.avatar_url, { bgColor: 'bg-gray-200', iconColor: 'text-gray-600'});
         lucide.createIcons();
         page.style.padding = '0'; 
         navigateTo('chat-page');
@@ -1793,15 +2214,6 @@
             const messageText = chatInput.value.trim();
             if (!messageText) return;
 
-            const tempMessage = {
-                sender_id: currentUser.id,
-                message_text: messageText,
-                created_at: new Date().toISOString()
-            };
-            
-            // Optimistic UI update
-            messageContainer.innerHTML += renderMessage(tempMessage);
-            messageContainer.scrollTop = messageContainer.scrollHeight;
             chatInput.value = '';
 
             const { error } = await db.from('chat_messages').insert({
@@ -1813,7 +2225,6 @@
             if (error) {
                 console.error('Error sending message:', error);
                 showToast('پیام ارسال نشد.', 'error');
-                // Optionally remove the optimistic message or mark it as failed
             }
         };
 
@@ -1828,8 +2239,8 @@
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, 
             (payload) => {
                 const newMessage = payload.new;
-                // Only render incoming messages from the other user to avoid duplication
-                if (newMessage.sender_id === otherUserId && newMessage.receiver_id === currentUser.id) {
+                if ((newMessage.sender_id === otherUserId && newMessage.receiver_id === currentUser.id) || 
+                    (newMessage.sender_id === currentUser.id && newMessage.receiver_id === otherUserId)) {
                     messageContainer.innerHTML += renderMessage(newMessage);
                     messageContainer.scrollTop = messageContainer.scrollHeight;
                 }
@@ -1844,6 +2255,51 @@
         }
         document.getElementById('chat-page').style.padding = ''; 
         navigateTo(lastPageId);
+    };
+    
+    const confirmEndChat = (clientId) => {
+        const content = 'آیا از پایان دادن به این گفتگو مطمئن هستید؟ با این کار، وضعیت نوبت به "پایان‌یافته" تغییر می‌کند و کاربر می‌تواند برای شما نظر ثبت کند.';
+        const actions = [{
+            text: 'بله، پایان بده',
+            className: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700',
+            handler: `endChat('${clientId}')`
+        }];
+        showModal('تایید پایان گفتگو', content, actions);
+    };
+
+    const endChat = async (clientId) => {
+        closeModal();
+        showLoading();
+        
+        const { data: appointment, error: aptError } = await db
+            .from('appointments')
+            .select('id')
+            .eq('therapist_id', currentUser.id)
+            .eq('client_id', clientId)
+            .eq('status', 'confirmed')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+        if (aptError || !appointment) {
+            hideLoading();
+            showToast('نوبت تایید شده‌ای برای این کاربر یافت نشد.', 'error');
+            return;
+        }
+
+        const { error: updateError } = await db
+            .from('appointments')
+            .update({ status: 'completed' })
+            .eq('id', appointment.id);
+
+        hideLoading();
+        if (updateError) {
+            showToast('خطا در پایان دادن به گفتگو.', 'error');
+        } else {
+            showToast('گفتگو با موفقیت پایان یافت.', 'success');
+            goBackFromChat();
+            renderTherapistDashboard(); // Refresh dashboard to update counts
+        }
     };
 
 
@@ -1920,11 +2376,7 @@
     window.bookAppointment = bookAppointment;
     window.cancelAppointment = cancelAppointment;
     window.openProfileEditor = openProfileEditor;
-    window.showWallet = showWallet;
     window.showSupportRequest = showSupportRequest;
-    window.showFaq = showFaq;
-    window.showAboutUs = showAboutUs;
-    window.showTerms = showTerms;
     window.viewTestHistory = viewTestHistory;
     window.updateTherapistProfile = updateTherapistProfile;
     window.viewClientDetails = viewClientDetails;
@@ -1932,13 +2384,19 @@
     window.goBackFromChat = goBackFromChat;
     window.navigateToTraining = navigateToTraining;
     window.goBackFromTraining = goBackFromTraining;
-    // New Journal Functions
-    window.loadJournalEntries = loadJournalEntries;
     window.editJournalEntry = editJournalEntry;
     window.updateJournalEntry = updateJournalEntry;
     window.confirmDeleteJournalEntry = confirmDeleteJournalEntry;
     window.deleteJournalEntry = deleteJournalEntry;
-
+    window.uploadProfilePicture = uploadProfilePicture;
+    window.showAvailableSlots = showAvailableSlots;
+    window.addAvailableSlot = addAvailableSlot;
+    window.deleteAvailableSlot = deleteAvailableSlot;
+    window.handleAppointmentConfirmation = handleAppointmentConfirmation;
+    window.showRatingModal = showRatingModal;
+    window.submitReview = submitReview;
+    window.confirmEndChat = confirmEndChat;
+    window.endChat = endChat;
 
 </script>
 </body>
