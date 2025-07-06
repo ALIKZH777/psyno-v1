@@ -193,7 +193,7 @@
                         </div>
                         <button type="submit" class="w-full bg-white text-teal-600 font-bold py-3 rounded-lg hover:bg-gray-100 transition duration-300 shadow-md">ورود</button>
                         
-                        <!-- QUICK LOGIN FIX: Quick login buttons container -->
+                        <!-- QUICK LOGIN FIX: Quick login button container -->
                         <div id="quick-login-container" class="hidden space-y-2 pt-2">
                              <div class="relative flex py-2 items-center">
                                 <div class="flex-grow border-t border-white/50"></div>
@@ -201,10 +201,6 @@
                                 <div class="flex-grow border-t border-white/50"></div>
                             </div>
                             <button type="button" id="quick-login-btn" class="w-full bg-blue-500 text-white font-bold py-3 rounded-lg hover:bg-blue-600 transition duration-300 shadow-md">ورود سریع</button>
-                            <button type="button" id="biometric-login-btn" class="w-full bg-transparent border-2 border-white text-white font-bold py-3 rounded-lg hover:bg-white/20 transition duration-300 shadow-md flex items-center justify-center gap-2">
-                                <i data-lucide="fingerprint"></i>
-                                <span>ورود با اثر انگشت</span>
-                            </button>
                         </div>
 
                         <p class="text-center text-sm text-white">
@@ -424,7 +420,7 @@
 
 
     // =================================================================
-    // AUTHENTICATION (REWORKED FOR QUICK & BIOMETRIC LOGIN)
+    // AUTHENTICATION (REWORKED FOR QUICK LOGIN)
     // =================================================================
 
     const authPage = document.getElementById('auth-page');
@@ -433,7 +429,6 @@
     const signupForm = document.getElementById('signup-form');
     const quickLoginContainer = document.getElementById('quick-login-container');
     const quickLoginBtn = document.getElementById('quick-login-btn');
-    const biometricLoginBtn = document.getElementById('biometric-login-btn');
 
 
     document.getElementById('show-signup').addEventListener('click', (e) => {
@@ -459,8 +454,6 @@
             showToast(`خطا در ورود: ${error.message}`, 'error');
         } else {
             // QUICK LOGIN FIX: Save credentials on successful login
-            // WARNING: Storing credentials in localStorage is not recommended for production.
-            // This is implemented as per user request. A more secure method (e.g., refresh tokens) is advised.
             try {
                 localStorage.setItem('psyno_quick_email', email);
                 localStorage.setItem('psyno_quick_password', password);
@@ -530,47 +523,7 @@
         }
     };
     
-    // BIOMETRIC FIX: Function to handle biometric login
-    const handleBiometricLogin = async () => {
-        // Check if WebAuthn is supported by the browser
-        if (!navigator.credentials || !navigator.credentials.get) {
-            showToast('مرورگر شما از ورود بیومتریک پشتیبانی نمی‌کند.', 'error');
-            return;
-        }
-
-        showToast('لطفاً از حسگر اثر انگشت یا تشخیص چهره استفاده کنید.', 'info');
-
-        try {
-            // This is a conceptual implementation. A real implementation requires a server-side
-            // component to generate a challenge and a prior user registration step.
-            // For now, we simulate success and then use the stored credentials.
-            // A real `challenge` would be a Uint8Array from the server.
-            const credential = await navigator.credentials.get({
-                publicKey: {
-                    challenge: new Uint8Array(32), // Placeholder challenge
-                    allowCredentials: [],
-                    timeout: 60000,
-                    userVerification: 'preferred',
-                }
-            });
-
-            if (credential) {
-                // In a real app, you'd send the credential to your server for verification.
-                // Here, we proceed with the quick login as a fallback.
-                showToast('احراز هویت بیومتریک موفق بود. در حال ورود...', 'success');
-                await handleQuickLogin();
-            } else {
-                 showToast('احراز هویت بیومتریک لغو شد.', 'error');
-            }
-
-        } catch (err) {
-            console.error('Biometric Error:', err);
-            showToast(`خطای بیومتریک: ${err.message}`, 'error');
-        }
-    };
-
     quickLoginBtn.addEventListener('click', handleQuickLogin);
-    biometricLoginBtn.addEventListener('click', handleBiometricLogin);
     
     // QUICK LOGIN FIX: Check for saved credentials on page load
     const checkForQuickLogin = () => {
@@ -578,7 +531,6 @@
             const savedEmail = localStorage.getItem('psyno_quick_email');
             if (savedEmail) {
                 quickLoginContainer.classList.remove('hidden');
-                lucide.createIcons();
             } else {
                 quickLoginContainer.classList.add('hidden');
             }
@@ -704,7 +656,7 @@
     };
 
     // =================================================================
-    // OPTIMIZED: TRAINING SECTION
+    // TRAINING SECTION (IMPROVED LOADING)
     // =================================================================
     const navigateToTraining = () => {
         const page = document.getElementById('training-page');
@@ -722,11 +674,12 @@
                 <button onclick="goBackFromTraining()" class="text-gray-600"><i data-lucide="arrow-right"></i></button>
                 <h1 class="font-bold text-lg">بخش آموزش</h1>
             </header>
-            <div id="training-content-area" class="flex-grow relative bg-gray-100">
-                <div id="training-loader" class="absolute inset-0 flex items-center justify-center">
+            <div id="training-content-area" class="flex-grow relative bg-gray-100 flex items-center justify-center p-4">
+                <div id="training-loader" class="flex flex-col items-center justify-center text-center">
                     <div class="loader"></div>
+                    <p class="mt-4 text-gray-600">در حال بارگذاری بخش آموزش...</p>
                 </div>
-                <iframe id="training-iframe" class="w-full h-full border-0" style="visibility: hidden;"></iframe>
+                <iframe id="training-iframe" class="w-full h-full border-0" style="display: none;"></iframe>
             </div>
         `;
         lucide.createIcons();
@@ -736,10 +689,34 @@
         
         const iframe = document.getElementById('training-iframe');
         const loader = document.getElementById('training-loader');
+        const contentArea = document.getElementById('training-content-area');
+
+        const showErrorState = () => {
+            contentArea.innerHTML = `
+                <div class="text-center text-gray-700 animate-fadeIn">
+                    <i data-lucide="cloud-off" class="w-16 h-16 mx-auto text-red-400"></i>
+                    <h2 class="mt-4 text-xl font-bold">خطا در بارگذاری</h2>
+                    <p class="mt-2 text-gray-500">متاسفانه نتوانستیم به بخش آموزش متصل شویم. لطفاً اتصال اینترنت خود را بررسی کرده و دوباره تلاش کنید.</p>
+                    <button onclick="navigateToTraining()" class="mt-6 bg-teal-500 text-white font-semibold py-2 px-6 rounded-lg hover:bg-teal-600 transition-all duration-300 flex items-center gap-2 mx-auto">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                        <span>تلاش مجدد</span>
+                    </button>
+                </div>
+            `;
+            lucide.createIcons();
+        };
+
+        const loadingTimeout = setTimeout(showErrorState, 15000); // 15-second timeout
 
         iframe.onload = () => {
+            clearTimeout(loadingTimeout);
             loader.style.display = 'none';
-            iframe.style.visibility = 'visible';
+            iframe.style.display = 'block';
+        };
+
+        iframe.onerror = () => {
+            clearTimeout(loadingTimeout);
+            showErrorState();
         };
         
         iframe.src = "https://vids.psynoland.ir/";
@@ -803,14 +780,11 @@
     const renderClientDashboard = async () => {
         const page = document.getElementById('client-dashboard-page');
         
-        // POST-SESSION DASHBOARD FIX: The query below correctly checks for 'confirmed' appointments.
-        // When a therapist ends a session, its status changes to 'completed', so this query will
-        // return null, and the "Book an appointment" card will be shown automatically. No change needed here.
         const { data: lastAppointment, error: lastAptError } = await db
             .from('appointments')
             .select('status, therapist:therapist_id ( id, full_name, avatar_url )')
             .eq('client_id', currentUser.id)
-            .eq('status', 'confirmed') // Only show active therapists
+            .eq('status', 'confirmed')
             .order('created_at', { ascending: false })
             .limit(1)
             .single();
@@ -865,7 +839,7 @@
                             { emoji: '😔', score: 1, label: 'خیلی بد' },
                             { emoji: '😟', score: 2, label: 'بد' },
                             { emoji: '😐', score: 3, label: 'معمولی' },
-                            { emoji: '🙂', score: 4, label: 'خوب' },
+                            { emoji: '�', score: 4, label: 'خوب' },
                             { emoji: '😄', score: 5, label: 'عالی' }
                         ].map(mood => `
                             <button onclick="submitMood(${mood.score})" class="flex flex-col items-center space-y-1 text-gray-600 hover:text-teal-600 transition">
@@ -911,7 +885,6 @@
         await loadJournalEntries();
         lucide.createIcons();
         
-        // RATING POPUP FIX: Check for reviews after dashboard has rendered
         await checkForPendingReviews();
     };
     
@@ -1391,7 +1364,6 @@
             if (apt.status === 'pending' || apt.status === 'confirmed') {
                 actionButtons += `<button onclick="cancelAppointment(${apt.id}, ${apt.slot.id})" class="flex-1 bg-red-100 text-red-700 py-2 rounded-lg text-sm">لغو نوبت</button>`;
             }
-            // RATING POPUP FIX: This button is a fallback. The main prompt will be automatic.
             if (apt.status === 'completed') {
                 actionButtons = `<button onclick="showRatingModal(${apt.id}, '${apt.therapist.id}', '${apt.therapist.full_name}')" class="flex-1 bg-amber-500 text-white py-2 rounded-lg text-sm">ثبت امتیاز و نظر</button>`;
             }
@@ -1565,7 +1537,6 @@
         await loadClientAppointments();
     };
     
-    // RATING POPUP FIX: New function to check for unreviewed sessions
     const checkForPendingReviews = async () => {
         const { data: completedAppointments, error: aptError } = await db
             .from('appointments')
@@ -1590,11 +1561,10 @@
         if (unreviewedAppointment) {
             setTimeout(() => {
                 showRatingModal(unreviewedAppointment.id, unreviewedAppointment.therapist.id, unreviewedAppointment.therapist.full_name);
-            }, 1000); // Delay to allow user to see the dashboard first
+            }, 1000);
         }
     };
 
-    // RATING POPUP FIX: New function to show rating modal
     const showRatingModal = (appointmentId, therapistId, therapistName = '') => {
         let currentRating = 0;
         const title = therapistName ? `امتیازدهی به جلسه با ${therapistName}` : 'امتیازدهی به جلسه';
@@ -1617,7 +1587,7 @@
         stars.forEach(star => {
             star.addEventListener('click', () => {
                 currentRating = star.dataset.value;
-                window.currentRating = currentRating; // Store globally for the handler
+                window.currentRating = currentRating;
                 stars.forEach(s => {
                     s.classList.toggle('selected', s.dataset.value <= currentRating);
                 });
@@ -1625,7 +1595,6 @@
         });
     };
 
-    // RATING POPUP FIX: New function to submit the review
     const submitReview = async (appointmentId, therapistId) => {
         const rating = window.currentRating;
         const comment = document.getElementById('rating-comment').value;
@@ -1638,8 +1607,6 @@
         closeModal();
         showActionSpinner();
 
-        // Note: Ensure you have a 'reviews' table with columns:
-        // id, created_at, appointment_id, client_id, therapist_id, rating, comment
         const { error } = await db.from('reviews').insert({
             appointment_id: appointmentId,
             client_id: currentUser.id,
@@ -1653,7 +1620,6 @@
             showToast('خطا در ثبت نظر. شاید قبلا نظر خود را ثبت کرده باشید.', 'error');
             console.error(error);
         } else {
-            // Also, ensure you have an RPC function 'update_therapist_rating'
             const { error: rpcError } = await db.rpc('update_therapist_rating', { therapist_id_arg: therapistId });
             hideActionSpinner();
             if (rpcError) {
@@ -1662,7 +1628,8 @@
             } else {
                  showToast('نظر و امتیاز شما با موفقیت ثبت شد.', 'success');
             }
-            await loadClientAppointments(); // Refresh appointment list to remove the button
+            // RATING FIX: Refresh the entire appointments page to update the therapist list with new stars.
+            await renderClientAppointments();
         }
     };
 
@@ -1716,7 +1683,7 @@
                          </div>
                      </a>
                  </div>
-                 <p class="text-center text-gray-400 text-sm">نسخه ۲.۰.۰</p>
+                 <p class="text-center text-gray-400 text-sm">نسخه ۲.۰.۳</p>
              </div>
         `;
         renderAvatar(document.getElementById('profile-page-avatar'), userProfile.avatar_url);
@@ -2200,6 +2167,24 @@
 
     // --- THERAPIST: PROFILE ---
     const renderTherapistProfile = async () => {
+        // RATING FIX: Re-fetch the latest profile data every time the page is rendered
+        // to ensure the star rating is always up-to-date.
+        showActionSpinner();
+        const { data: latestProfile, error: profileError } = await db
+            .from('profiles')
+            .select('*')
+            .eq('id', currentUser.id)
+            .single();
+        hideActionSpinner();
+
+        if (profileError || !latestProfile) {
+            showToast('خطا در بارگذاری اطلاعات پروفایل.', 'error');
+            console.error(profileError);
+            return;
+        }
+        // Update the global userProfile object
+        userProfile = latestProfile;
+
         const page = document.getElementById('therapist-profile-page');
         page.innerHTML = `
             <div class="space-y-6">
@@ -2235,7 +2220,6 @@
                     <button onclick="updateTherapistProfile()" class="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold">ذخیره تغییرات</button>
                 </div>
 
-                <!-- RATING POPUP FIX: Display reviews here -->
                 <div class="bg-white p-4 rounded-2xl shadow-md">
                     <h2 class="text-lg font-bold mb-3">نظرات مراجعین</h2>
                     <div id="therapist-reviews-list" class="space-y-3 max-h-64 overflow-y-auto"></div>
@@ -2272,7 +2256,6 @@
         }
     };
 
-    // RATING POPUP FIX: New function to load and display reviews for the therapist
     const loadTherapistReviews = async () => {
         const listEl = document.getElementById('therapist-reviews-list');
         if (!listEl) return;
@@ -2280,7 +2263,7 @@
 
         const { data, error } = await db
             .from('reviews')
-            .select('*, client:client_id(full_name)')
+            .select('*')
             .eq('therapist_id', currentUser.id)
             .order('created_at', { ascending: false });
 
@@ -2297,7 +2280,7 @@
         listEl.innerHTML = data.map(review => `
             <div class="bg-gray-50 p-3 rounded-lg border">
                 <div class="flex justify-between items-center mb-2">
-                    <span class="font-semibold text-sm">${review.client.full_name}</span>
+                    <span class="font-semibold text-sm">کاربر ساینو</span>
                     <div class="flex items-center">
                         <span class="text-amber-500 font-bold ml-1">${review.rating}</span>
                         <i data-lucide="star" class="w-4 h-4 text-amber-400 fill-current"></i>
@@ -2457,7 +2440,6 @@
         }
     };
 
-    // CHAT FIX: Robust optimistic UI for sending messages
     const handleSendMessage = async (otherUserId, chatInput) => {
         const messageText = chatInput.value.trim();
         if (!messageText) return;
@@ -2498,7 +2480,6 @@
                     lucide.createIcons({ nodes: [ticksEl] });
                 }
             } else {
-                // Replace temp message with real one from DB
                 const finalMessageNode = new DOMParser().parseFromString(renderMessage(data), 'text/html').body.firstChild;
                 tempNode.replaceWith(finalMessageNode);
                 lucide.createIcons({ nodes: [finalMessageNode] });
@@ -2554,7 +2535,6 @@
         }
     };
     
-    // POST-SESSION FIX: Function for therapist to end the chat session
     const confirmEndChat = (clientId) => {
         const content = 'آیا از پایان دادن به این گفتگو مطمئن هستید؟ با این کار، وضعیت نوبت به "پایان‌یافته" تغییر می‌کند و کاربر می‌تواند برای شما نظر ثبت کند.';
         const actions = [{
@@ -2569,7 +2549,6 @@
         closeModal();
         showActionSpinner();
         
-        // Find the latest 'confirmed' appointment to mark as 'completed'
         const { data: appointment, error: aptError } = await db
             .from('appointments')
             .select('id')
@@ -2597,7 +2576,7 @@
         } else {
             showToast('گفتگو با موفقیت پایان یافت.', 'success');
             goBackFromChat();
-            renderTherapistDashboard(); // Refresh dashboard to update counts
+            renderTherapistDashboard();
         }
     };
 
@@ -2665,6 +2644,7 @@
     window.navigateTo = navigateTo;
     window.closeModal = closeModal;
     window.handleLogout = handleLogout;
+    window.handleQuickLogin = handleQuickLogin; // Make quick login globally accessible
     window.submitMood = submitMood;
     window.submitJournal = submitJournal;
     window.openAiChat = openAiChat;
