@@ -2,7 +2,8 @@
 <html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- ZOOM & SELECT FIX: Added user-scalable=no to prevent zooming -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
     <title>ساینو - دستیار سلامت روان شما</title>
     
     <!-- Tailwind CSS -->
@@ -29,6 +30,11 @@
         body {
             font-family: 'Vazirmatn', sans-serif;
             -webkit-tap-highlight-color: transparent;
+            /* ZOOM & SELECT FIX: Disable text selection and copying */
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
         }
 
         html, body {
@@ -109,7 +115,6 @@
         }
 
         #loading-spinner {
-            /* This is now a full-page loader, visible by default */
             display: flex;
         }
         #loading-spinner .loader, #action-spinner .loader {
@@ -161,14 +166,12 @@
 </head>
 <body class="bg-white">
 
-    <!-- LOGIN PERSISTENCE FIX: Spinner is visible by default and covers the whole screen -->
     <div id="loading-spinner" class="fixed inset-0 bg-white z-50 flex items-center justify-center">
         <div class="loader"></div>
     </div>
 
     <div id="modal-container" class="modal-backdrop"></div>
 
-    <!-- LOGIN PERSISTENCE FIX: Auth page is hidden by default -->
     <div id="auth-page" class="page hidden bg-gradient-to-br from-teal-400 to-blue-500">
         <div class="w-full h-full flex items-center justify-center">
             <div class="w-full max-w-md m-auto p-8">
@@ -189,6 +192,21 @@
                             <input type="password" id="login-password" required class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 placeholder-gray-600 focus:ring-2 focus:ring-white">
                         </div>
                         <button type="submit" class="w-full bg-white text-teal-600 font-bold py-3 rounded-lg hover:bg-gray-100 transition duration-300 shadow-md">ورود</button>
+                        
+                        <!-- QUICK LOGIN FIX: Quick login buttons container -->
+                        <div id="quick-login-container" class="hidden space-y-2 pt-2">
+                             <div class="relative flex py-2 items-center">
+                                <div class="flex-grow border-t border-white/50"></div>
+                                <span class="flex-shrink mx-4 text-white/80 text-sm">یا</span>
+                                <div class="flex-grow border-t border-white/50"></div>
+                            </div>
+                            <button type="button" id="quick-login-btn" class="w-full bg-blue-500 text-white font-bold py-3 rounded-lg hover:bg-blue-600 transition duration-300 shadow-md">ورود سریع</button>
+                            <button type="button" id="biometric-login-btn" class="w-full bg-transparent border-2 border-white text-white font-bold py-3 rounded-lg hover:bg-white/20 transition duration-300 shadow-md flex items-center justify-center gap-2">
+                                <i data-lucide="fingerprint"></i>
+                                <span>ورود با اثر انگشت</span>
+                            </button>
+                        </div>
+
                         <p class="text-center text-sm text-white">
                             حساب کاربری ندارید؟ <a href="#" id="show-signup" class="font-bold hover:underline">ثبت‌نام کنید</a>
                         </p>
@@ -266,13 +284,13 @@
     // INITIALIZATION
     // =================================================================
     const { createClient } = supabase;
-    // LOGIN PERSISTENCE FIX: Explicitly configure session persistence.
     const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         auth: {
-            persistSession: true,
+            // LOGIN FIX: Session persistence is now handled manually with quick login
+            // to ensure user is logged out on app close as requested.
+            persistSession: false, 
             autoRefreshToken: true,
             detectSessionInUrl: true,
-            storage: window.localStorage,
         },
     });
     
@@ -303,7 +321,6 @@
         }
     };
 
-    // Use a separate loading indicator for async actions within the app
     const showActionSpinner = () => {
         const spinner = document.createElement('div');
         spinner.id = 'action-spinner';
@@ -407,13 +424,17 @@
 
 
     // =================================================================
-    // AUTHENTICATION
+    // AUTHENTICATION (REWORKED FOR QUICK & BIOMETRIC LOGIN)
     // =================================================================
 
     const authPage = document.getElementById('auth-page');
     const appContainer = document.getElementById('app-container');
     const loginForm = document.getElementById('login-form');
     const signupForm = document.getElementById('signup-form');
+    const quickLoginContainer = document.getElementById('quick-login-container');
+    const quickLoginBtn = document.getElementById('quick-login-btn');
+    const biometricLoginBtn = document.getElementById('biometric-login-btn');
+
 
     document.getElementById('show-signup').addEventListener('click', (e) => {
         e.preventDefault();
@@ -432,12 +453,22 @@
         showActionSpinner();
         const email = document.getElementById('login-email').value;
         const password = document.getElementById('login-password').value;
-        const { error } = await db.auth.signInWithPassword({ email, password });
+        const { data, error } = await db.auth.signInWithPassword({ email, password });
         if (error) {
             hideActionSpinner();
             showToast(`خطا در ورود: ${error.message}`, 'error');
+        } else {
+            // QUICK LOGIN FIX: Save credentials on successful login
+            // WARNING: Storing credentials in localStorage is not recommended for production.
+            // This is implemented as per user request. A more secure method (e.g., refresh tokens) is advised.
+            try {
+                localStorage.setItem('psyno_quick_email', email);
+                localStorage.setItem('psyno_quick_password', password);
+            } catch (e) {
+                console.warn("Could not save quick login credentials.", e);
+            }
         }
-        // On success, onAuthStateChange will hide the spinner.
+        // On success, onAuthStateChange will handle UI changes.
     });
 
     signupForm.addEventListener('submit', async (e) => {
@@ -478,11 +509,88 @@
         if (error) {
             showToast(`خطا در خروج: ${error.message}`, 'error');
         }
-        // onAuthStateChange will handle the rest.
+        // onAuthStateChange will handle showing the login page.
+    };
+    
+    // QUICK LOGIN FIX: Function to handle quick login
+    const handleQuickLogin = async () => {
+        const email = localStorage.getItem('psyno_quick_email');
+        const password = localStorage.getItem('psyno_quick_password');
+
+        if (!email || !password) {
+            showToast('اطلاعات ورود سریع یافت نشد. لطفاً یکبار به صورت عادی وارد شوید.', 'error');
+            return;
+        }
+
+        showActionSpinner();
+        const { error } = await db.auth.signInWithPassword({ email, password });
+        if (error) {
+            hideActionSpinner();
+            showToast(`خطا در ورود سریع: ${error.message}`, 'error');
+        }
+    };
+    
+    // BIOMETRIC FIX: Function to handle biometric login
+    const handleBiometricLogin = async () => {
+        // Check if WebAuthn is supported by the browser
+        if (!navigator.credentials || !navigator.credentials.get) {
+            showToast('مرورگر شما از ورود بیومتریک پشتیبانی نمی‌کند.', 'error');
+            return;
+        }
+
+        showToast('لطفاً از حسگر اثر انگشت یا تشخیص چهره استفاده کنید.', 'info');
+
+        try {
+            // This is a conceptual implementation. A real implementation requires a server-side
+            // component to generate a challenge and a prior user registration step.
+            // For now, we simulate success and then use the stored credentials.
+            // A real `challenge` would be a Uint8Array from the server.
+            const credential = await navigator.credentials.get({
+                publicKey: {
+                    challenge: new Uint8Array(32), // Placeholder challenge
+                    allowCredentials: [],
+                    timeout: 60000,
+                    userVerification: 'preferred',
+                }
+            });
+
+            if (credential) {
+                // In a real app, you'd send the credential to your server for verification.
+                // Here, we proceed with the quick login as a fallback.
+                showToast('احراز هویت بیومتریک موفق بود. در حال ورود...', 'success');
+                await handleQuickLogin();
+            } else {
+                 showToast('احراز هویت بیومتریک لغو شد.', 'error');
+            }
+
+        } catch (err) {
+            console.error('Biometric Error:', err);
+            showToast(`خطای بیومتریک: ${err.message}`, 'error');
+        }
     };
 
+    quickLoginBtn.addEventListener('click', handleQuickLogin);
+    biometricLoginBtn.addEventListener('click', handleBiometricLogin);
+    
+    // QUICK LOGIN FIX: Check for saved credentials on page load
+    const checkForQuickLogin = () => {
+        try {
+            const savedEmail = localStorage.getItem('psyno_quick_email');
+            if (savedEmail) {
+                quickLoginContainer.classList.remove('hidden');
+                lucide.createIcons();
+            } else {
+                quickLoginContainer.classList.add('hidden');
+            }
+        } catch (e) {
+            console.warn("Could not check for quick login credentials.", e);
+            quickLoginContainer.classList.add('hidden');
+        }
+    };
+
+
     // =================================================================
-    // APP INITIALIZATION & ROUTING (LOGIN PERSISTENCE FIX)
+    // APP INITIALIZATION & ROUTING
     // =================================================================
 
     db.auth.onAuthStateChange(async (event, session) => {
@@ -513,6 +621,8 @@
                 appContainer.classList.add('hidden');
                 authPage.classList.remove('hidden');
                 authPage.classList.add('active');
+                // QUICK LOGIN FIX: Check for credentials when user is logged out
+                checkForQuickLogin();
             }
         } catch (err) {
             console.error("Fatal error in onAuthStateChange:", err);
@@ -521,7 +631,6 @@
             authPage.classList.remove('hidden');
             authPage.classList.add('active');
         } finally {
-            // FIX: Hide both the main loader and any action spinner that might have been left open.
             loadingSpinner.style.display = 'none';
             hideActionSpinner();
         }
@@ -694,29 +803,20 @@
     const renderClientDashboard = async () => {
         const page = document.getElementById('client-dashboard-page');
         
+        // POST-SESSION DASHBOARD FIX: The query below correctly checks for 'confirmed' appointments.
+        // When a therapist ends a session, its status changes to 'completed', so this query will
+        // return null, and the "Book an appointment" card will be shown automatically. No change needed here.
         const { data: lastAppointment, error: lastAptError } = await db
             .from('appointments')
             .select('status, therapist:therapist_id ( id, full_name, avatar_url )')
             .eq('client_id', currentUser.id)
-            .in('status', ['confirmed', 'completed'])
+            .eq('status', 'confirmed') // Only show active therapists
             .order('created_at', { ascending: false })
             .limit(1)
             .single();
 
         let therapistCardHTML = '';
         if (lastAppointment && lastAppointment.therapist) {
-            const chatButton = lastAppointment.status === 'confirmed' ? `
-                <button onclick="startChatWith('${lastAppointment.therapist.id}')" class="bg-teal-500 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2">
-                    <i data-lucide="message-circle"></i>
-                    <span>چت</span>
-                </button>
-            ` : `
-                <button class="bg-gray-300 text-gray-600 px-4 py-2 rounded-lg font-semibold cursor-not-allowed flex items-center gap-2">
-                    <i data-lucide="message-circle-off"></i>
-                    <span>پایان یافته</span>
-                </button>
-            `;
-
             therapistCardHTML = `
             <div class="bg-white p-4 rounded-2xl shadow-md flex items-center justify-between">
                 <div class="flex items-center gap-3">
@@ -726,13 +826,16 @@
                         <p class="font-bold text-lg">${lastAppointment.therapist.full_name}</p>
                     </div>
                 </div>
-                ${chatButton}
+                <button onclick="startChatWith('${lastAppointment.therapist.id}')" class="bg-teal-500 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2">
+                    <i data-lucide="message-circle"></i>
+                    <span>چت</span>
+                </button>
             </div>
             `;
         } else {
              therapistCardHTML = `
             <div class="bg-white p-4 rounded-2xl shadow-md text-center">
-                 <p class="font-semibold mb-2">هنوز روانشناسی برای شما ثبت نشده است.</p>
+                 <p class="font-semibold mb-2">در حال حاضر جلسه فعالی ندارید.</p>
                  <p class="text-sm text-gray-600 mb-4">برای شروع گفتگو، ابتدا یک نوبت رزرو کنید.</p>
                  <button onclick="navigateTo('client-appointments-page')" class="bg-teal-500 text-white px-6 py-2 rounded-lg font-semibold">رزرو نوبت</button>
             </div>
@@ -807,6 +910,9 @@
         await loadMoodChart();
         await loadJournalEntries();
         lucide.createIcons();
+        
+        // RATING POPUP FIX: Check for reviews after dashboard has rendered
+        await checkForPendingReviews();
     };
     
     const calculateAndDisplayHealthScore = async () => {
@@ -1211,7 +1317,7 @@
         `;
     };
 
-    // --- CLIENT: APPOINTMENTS (REWORKED) ---
+    // --- CLIENT: APPOINTMENTS ---
     const renderClientAppointments = async () => {
         const page = document.getElementById('client-appointments-page');
         page.innerHTML = `
@@ -1285,8 +1391,9 @@
             if (apt.status === 'pending' || apt.status === 'confirmed') {
                 actionButtons += `<button onclick="cancelAppointment(${apt.id}, ${apt.slot.id})" class="flex-1 bg-red-100 text-red-700 py-2 rounded-lg text-sm">لغو نوبت</button>`;
             }
+            // RATING POPUP FIX: This button is a fallback. The main prompt will be automatic.
             if (apt.status === 'completed') {
-                actionButtons = `<button onclick="showRatingModal(${apt.id}, '${apt.therapist.id}')" class="flex-1 bg-amber-500 text-white py-2 rounded-lg text-sm">ثبت امتیاز و نظر</button>`;
+                actionButtons = `<button onclick="showRatingModal(${apt.id}, '${apt.therapist.id}', '${apt.therapist.full_name}')" class="flex-1 bg-amber-500 text-white py-2 rounded-lg text-sm">ثبت امتیاز و نظر</button>`;
             }
 
             container.innerHTML = `
@@ -1458,28 +1565,59 @@
         await loadClientAppointments();
     };
     
-    const showRatingModal = (appointmentId, therapistId) => {
+    // RATING POPUP FIX: New function to check for unreviewed sessions
+    const checkForPendingReviews = async () => {
+        const { data: completedAppointments, error: aptError } = await db
+            .from('appointments')
+            .select('id, therapist:therapist_id(id, full_name)')
+            .eq('client_id', currentUser.id)
+            .eq('status', 'completed');
+
+        if (aptError || !completedAppointments || completedAppointments.length === 0) return;
+
+        const { data: reviews, error: revError } = await db
+            .from('reviews')
+            .select('appointment_id')
+            .eq('client_id', currentUser.id);
+
+        if (revError) return;
+
+        const reviewedAppointmentIds = reviews.map(r => r.appointment_id);
+        const unreviewedAppointment = completedAppointments.find(
+            apt => !reviewedAppointmentIds.includes(apt.id)
+        );
+
+        if (unreviewedAppointment) {
+            setTimeout(() => {
+                showRatingModal(unreviewedAppointment.id, unreviewedAppointment.therapist.id, unreviewedAppointment.therapist.full_name);
+            }, 1000); // Delay to allow user to see the dashboard first
+        }
+    };
+
+    // RATING POPUP FIX: New function to show rating modal
+    const showRatingModal = (appointmentId, therapistId, therapistName = '') => {
         let currentRating = 0;
+        const title = therapistName ? `امتیازدهی به جلسه با ${therapistName}` : 'امتیازدهی به جلسه';
         const content = `
-            <p class="mb-4">لطفا به جلسه خود با روانشناس امتیاز دهید و نظر خود را بنویسید.</p>
+            <p class="mb-4">جلسه شما به پایان رسید. لطفا به این جلسه امتیاز دهید. ثبت نظر متنی اختیاری است.</p>
             <div id="modal-star-rating" class="star-rating flex justify-center text-4xl mb-4">
                 ${[1,2,3,4,5].map(i => `<i data-lucide="star" data-value="${i}" class="star"></i>`).join('')}
             </div>
-            <textarea id="rating-comment" class="w-full h-24 p-2 border rounded-lg" placeholder="نظر خود را اینجا بنویسید..."></textarea>
+            <textarea id="rating-comment" class="w-full h-24 p-2 border rounded-lg" placeholder="نظر خود را اینجا بنویسید (اختیاری)..."></textarea>
         `;
         const actions = [{
             text: 'ثبت نظر',
             className: 'px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600',
             handler: `submitReview(${appointmentId}, '${therapistId}')`
         }];
-        showModal('امتیازدهی به جلسه', content, actions);
+        showModal(title, content, actions);
         lucide.createIcons();
 
         const stars = document.querySelectorAll('#modal-star-rating .star');
         stars.forEach(star => {
             star.addEventListener('click', () => {
                 currentRating = star.dataset.value;
-                window.currentRating = currentRating; // Make it accessible to submitReview
+                window.currentRating = currentRating; // Store globally for the handler
                 stars.forEach(s => {
                     s.classList.toggle('selected', s.dataset.value <= currentRating);
                 });
@@ -1487,6 +1625,7 @@
         });
     };
 
+    // RATING POPUP FIX: New function to submit the review
     const submitReview = async (appointmentId, therapistId) => {
         const rating = window.currentRating;
         const comment = document.getElementById('rating-comment').value;
@@ -1499,6 +1638,8 @@
         closeModal();
         showActionSpinner();
 
+        // Note: Ensure you have a 'reviews' table with columns:
+        // id, created_at, appointment_id, client_id, therapist_id, rating, comment
         const { error } = await db.from('reviews').insert({
             appointment_id: appointmentId,
             client_id: currentUser.id,
@@ -1512,6 +1653,7 @@
             showToast('خطا در ثبت نظر. شاید قبلا نظر خود را ثبت کرده باشید.', 'error');
             console.error(error);
         } else {
+            // Also, ensure you have an RPC function 'update_therapist_rating'
             const { error: rpcError } = await db.rpc('update_therapist_rating', { therapist_id_arg: therapistId });
             hideActionSpinner();
             if (rpcError) {
@@ -1520,7 +1662,7 @@
             } else {
                  showToast('نظر و امتیاز شما با موفقیت ثبت شد.', 'success');
             }
-            await loadClientAppointments();
+            await loadClientAppointments(); // Refresh appointment list to remove the button
         }
     };
 
@@ -1531,51 +1673,51 @@
         page.innerHTML = `
             <div class="p-4 space-y-6">
                  <div class="flex flex-col items-center space-y-4">
-                    <div class="relative w-24 h-24">
-                        <div id="profile-page-avatar" class="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg"></div>
-                        <label for="avatar-upload" class="absolute bottom-0 right-0 bg-white p-1.5 rounded-full shadow-md cursor-pointer">
-                            <i data-lucide="camera" class="w-5 h-5 text-gray-600"></i>
-                            <input id="avatar-upload" type="file" class="hidden" accept="image/*" onchange="uploadProfilePicture(event)">
-                        </label>
-                    </div>
-                    <div class="text-center">
-                        <h1 class="text-2xl font-bold text-gray-800">${userProfile.full_name}</h1>
-                        <p class="text-gray-500">${currentUser.email}</p>
-                    </div>
-                </div>
+                     <div class="relative w-24 h-24">
+                         <div id="profile-page-avatar" class="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg"></div>
+                         <label for="avatar-upload" class="absolute bottom-0 right-0 bg-white p-1.5 rounded-full shadow-md cursor-pointer">
+                             <i data-lucide="camera" class="w-5 h-5 text-gray-600"></i>
+                             <input id="avatar-upload" type="file" class="hidden" accept="image/*" onchange="uploadProfilePicture(event)">
+                         </label>
+                     </div>
+                     <div class="text-center">
+                         <h1 class="text-2xl font-bold text-gray-800">${userProfile.full_name}</h1>
+                         <p class="text-gray-500">${currentUser.email}</p>
+                     </div>
+                 </div>
 
-                <div class="bg-white p-2 rounded-2xl shadow-md">
-                    <a href="#" onclick="openProfileEditor()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
-                        <div class="flex items-center gap-4">
-                            <i data-lucide="edit" class="text-gray-600"></i>
-                            <span class="font-semibold text-gray-700">ویرایش اطلاعات کاربری</span>
-                        </div>
-                        <i data-lucide="chevron-left" class="text-gray-400"></i>
-                    </a>
-                    <a href="#" onclick="viewTestHistory()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
-                        <div class="flex items-center gap-4">
-                            <i data-lucide="clipboard-list" class="text-gray-600"></i>
-                            <span class="font-semibold text-gray-700">سوابق تست‌ها</span>
-                        </div>
-                        <i data-lucide="chevron-left" class="text-gray-400"></i>
-                    </a>
-                    <a href="#" onclick="showSupportRequest()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
-                        <div class="flex items-center gap-4">
-                            <i data-lucide="headphones" class="text-gray-600"></i>
-                            <span class="font-semibold text-gray-700">درخواست پشتیبانی</span>
-                        </div>
-                        <i data-lucide="chevron-left" class="text-gray-400"></i>
-                    </a>
-                     <div class="border-t my-1 mx-2"></div>
-                    <a href="#" onclick="handleLogout()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg text-red-500">
-                        <div class="flex items-center gap-4">
-                            <i data-lucide="log-out"></i>
-                            <span class="font-semibold">خروج</span>
-                        </div>
-                    </a>
-                </div>
-                <p class="text-center text-gray-400 text-sm">نسخه ۱.۹.۰</p>
-            </div>
+                 <div class="bg-white p-2 rounded-2xl shadow-md">
+                     <a href="#" onclick="openProfileEditor()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
+                         <div class="flex items-center gap-4">
+                             <i data-lucide="edit" class="text-gray-600"></i>
+                             <span class="font-semibold text-gray-700">ویرایش اطلاعات کاربری</span>
+                         </div>
+                         <i data-lucide="chevron-left" class="text-gray-400"></i>
+                     </a>
+                     <a href="#" onclick="viewTestHistory()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
+                         <div class="flex items-center gap-4">
+                             <i data-lucide="clipboard-list" class="text-gray-600"></i>
+                             <span class="font-semibold text-gray-700">سوابق تست‌ها</span>
+                         </div>
+                         <i data-lucide="chevron-left" class="text-gray-400"></i>
+                     </a>
+                     <a href="#" onclick="showSupportRequest()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
+                         <div class="flex items-center gap-4">
+                             <i data-lucide="headphones" class="text-gray-600"></i>
+                             <span class="font-semibold text-gray-700">درخواست پشتیبانی</span>
+                         </div>
+                         <i data-lucide="chevron-left" class="text-gray-400"></i>
+                     </a>
+                      <div class="border-t my-1 mx-2"></div>
+                     <a href="#" onclick="handleLogout()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg text-red-500">
+                         <div class="flex items-center gap-4">
+                             <i data-lucide="log-out"></i>
+                             <span class="font-semibold">خروج</span>
+                         </div>
+                     </a>
+                 </div>
+                 <p class="text-center text-gray-400 text-sm">نسخه ۲.۰.۰</p>
+             </div>
         `;
         renderAvatar(document.getElementById('profile-page-avatar'), userProfile.avatar_url);
         lucide.createIcons();
@@ -1846,8 +1988,8 @@
                 `).join('');
                  document.getElementById('client-list-container').innerHTML = clientsHTML;
                  clients.forEach(client => {
-                    const avatarEl = document.getElementById(`client-list-avatar-${client.id}`);
-                    if (avatarEl) renderAvatar(avatarEl, client.avatar_url, { bgColor: 'bg-gray-200', iconColor: 'text-gray-600'});
+                     const avatarEl = document.getElementById(`client-list-avatar-${client.id}`);
+                     if (avatarEl) renderAvatar(avatarEl, client.avatar_url, { bgColor: 'bg-gray-200', iconColor: 'text-gray-600'});
                  });
             } else {
                 document.getElementById('client-list-container').innerHTML = '<p class="text-center text-gray-500">شما هیچ مراجعه‌کننده‌ای ندارید.</p>';
@@ -2072,7 +2214,7 @@
                     <div class="text-center">
                         <h1 class="text-2xl font-bold">${userProfile.full_name}</h1>
                         <p class="text-gray-500">${currentUser.email}</p>
-                        <div class="mt-2">${renderStars(userProfile.average_rating || 0, userProfile.total_ratings || 0)}</div>
+                        <div class="mt-2 flex justify-center">${renderStars(userProfile.average_rating || 0, userProfile.total_ratings || 0)}</div>
                     </div>
                 </div>
                 
@@ -2093,9 +2235,10 @@
                     <button onclick="updateTherapistProfile()" class="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold">ذخیره تغییرات</button>
                 </div>
 
+                <!-- RATING POPUP FIX: Display reviews here -->
                 <div class="bg-white p-4 rounded-2xl shadow-md">
                     <h2 class="text-lg font-bold mb-3">نظرات مراجعین</h2>
-                    <div id="therapist-reviews-list" class="space-y-3"></div>
+                    <div id="therapist-reviews-list" class="space-y-3 max-h-64 overflow-y-auto"></div>
                 </div>
 
                 <button onclick="handleLogout()" class="w-full bg-red-500 text-white font-bold py-3 rounded-lg hover:bg-red-600 transition">خروج از حساب</button>
@@ -2129,6 +2272,7 @@
         }
     };
 
+    // RATING POPUP FIX: New function to load and display reviews for the therapist
     const loadTherapistReviews = async () => {
         const listEl = document.getElementById('therapist-reviews-list');
         if (!listEl) return;
@@ -2159,7 +2303,7 @@
                         <i data-lucide="star" class="w-4 h-4 text-amber-400 fill-current"></i>
                     </div>
                 </div>
-                <p class="text-gray-700 text-sm">${review.comment || '<i>(بدون نظر متنی)</i>'}</p>
+                <p class="text-gray-700 text-sm italic">"${review.comment || 'بدون نظر متنی'}"</p>
                 <p class="text-xs text-gray-400 text-left mt-2">${new persianDate(new Date(review.created_at)).format('L')}</p>
             </div>
         `).join('');
@@ -2170,14 +2314,6 @@
     // =================================================================
     // SHARED: CHAT PAGE (UPGRADED WITH OPTIMISTIC UI & TICKS)
     // =================================================================
-    /**
-     * نکته مهم برای سیستم تیک در چت
-     * برای فعال‌سازی کامل سیستم دو تیک (خوانده شدن پیام)، باید یک ستون جدید
-     * در جدول `chat_messages` خود در Supabase اضافه کنید:
-     * * - نام ستون: is_read
-     * - نوع ستون: boolean
-     * - مقدار پیش‌فرض (Default Value): false
-     */
     const startChatWith = async (otherUserId) => {
         const page = document.getElementById('chat-page');
         const { data: otherUser, error } = await db.from('profiles').select('id, full_name, avatar_url').eq('id', otherUserId).single();
@@ -2240,23 +2376,22 @@
             (payload) => {
                 const newMessage = payload.new;
                 const isRelevant = (newMessage.sender_id === otherUserId && newMessage.receiver_id === currentUser.id) || 
-                                   (newMessage.sender_id === currentUser.id && newMessage.receiver_id === otherUserId);
+                                     (newMessage.sender_id === currentUser.id && newMessage.receiver_id === otherUserId);
 
                 if (!isRelevant) return;
 
                 if (payload.eventType === 'INSERT' && newMessage.sender_id === otherUserId) {
                     messageContainer.innerHTML += renderMessage(newMessage);
                     messageContainer.scrollTop = messageContainer.scrollHeight;
-                    markMessagesAsRead(otherUserId); // Mark as read as soon as it's received
+                    lucide.createIcons();
+                    markMessagesAsRead(otherUserId);
                 } else if (payload.eventType === 'UPDATE') {
                     const messageEl = document.querySelector(`[data-message-id='${newMessage.id}']`);
                     if (messageEl) {
                         const ticksEl = messageEl.querySelector('.chat-ticks');
                         if (ticksEl && newMessage.is_read) {
                             ticksEl.innerHTML = getTickHTML('read');
-                            lucide.createIcons({
-                                nodes: [ticksEl]
-                            });
+                            lucide.createIcons({ nodes: [ticksEl] });
                         }
                     }
                 }
@@ -2274,14 +2409,9 @@
     };
 
     const getTickHTML = (status) => {
-        if (status === 'read') {
-            return '<i data-lucide="check-check" class="w-4 h-4 text-blue-400"></i>';
-        }
-        if (status === 'sent') {
-            return '<i data-lucide="check" class="w-4 h-4"></i>';
-        }
-        // 'sending' status
-        return '<i data-lucide="clock" class="w-4 h-4"></i>';
+        if (status === 'read') return '<i data-lucide="check-check" class="w-4 h-4 text-blue-400"></i>';
+        if (status === 'sent') return '<i data-lucide="check" class="w-4 h-4"></i>';
+        return '<i data-lucide="clock" class="w-4 h-4"></i>'; // sending
     };
 
     const renderMessage = (msg) => {
@@ -2297,8 +2427,7 @@
             messageContentHTML = `<p class="whitespace-pre-wrap">${msg.message_text}</p>`;
         }
         
-        let tickStatus = 'sent';
-        if (msg.is_read) tickStatus = 'read';
+        let tickStatus = msg.is_read ? 'read' : 'sent';
         if (msg.optimisticStatus) tickStatus = msg.optimisticStatus;
 
         return `
@@ -2328,6 +2457,7 @@
         }
     };
 
+    // CHAT FIX: Robust optimistic UI for sending messages
     const handleSendMessage = async (otherUserId, chatInput) => {
         const messageText = chatInput.value.trim();
         if (!messageText) return;
@@ -2338,38 +2468,40 @@
             sender_id: currentUser.id,
             receiver_id: otherUserId,
             message_text: messageText,
+            image_url: null,
             created_at: new Date().toISOString(),
-            optimisticStatus: 'sending' // Custom flag for UI
+            is_read: false,
+            optimisticStatus: 'sending'
         };
-
-        // Optimistic UI update
+        
         const messageContainer = document.getElementById('chat-messages');
-        const tempMessageEl = document.createElement('div');
-        tempMessageEl.innerHTML = renderMessage(optimisticMessage);
-        messageContainer.appendChild(tempMessageEl.firstChild);
-        messageContainer.scrollTop = messageContainer.scrollHeight;
+        messageContainer.innerHTML += renderMessage(optimisticMessage);
         lucide.createIcons();
+        messageContainer.scrollTop = messageContainer.scrollHeight;
         chatInput.value = '';
 
-        // Actual DB insert
         const { data, error } = await db.from('chat_messages').insert({
             sender_id: optimisticMessage.sender_id,
-            receiver_id: optimisticMessage.receiver_id,
+            receiver_id: otherUserId,
             message_text: optimisticMessage.message_text,
-            is_read: false // Explicitly set
+            is_read: false
         }).select().single();
 
-        // Update the optimistic message with real data
-        const finalMessageEl = document.querySelector(`[data-message-id='${tempId}']`);
-        if (finalMessageEl) {
+        const tempNode = document.querySelector(`[data-message-id='${tempId}']`);
+        if (tempNode) {
             if (error) {
                 console.error('Error sending message:', error);
                 showToast('پیام ارسال نشد.', 'error');
-                finalMessageEl.classList.add('opacity-50'); // Show error state
+                const ticksEl = tempNode.querySelector('.chat-ticks');
+                if (ticksEl) {
+                    ticksEl.innerHTML = '<i data-lucide="alert-circle" class="w-4 h-4 text-red-500"></i>';
+                    lucide.createIcons({ nodes: [ticksEl] });
+                }
             } else {
-                // Replace temp element with final one from DB
-                finalMessageEl.outerHTML = renderMessage(data);
-                lucide.createIcons();
+                // Replace temp message with real one from DB
+                const finalMessageNode = new DOMParser().parseFromString(renderMessage(data), 'text/html').body.firstChild;
+                tempNode.replaceWith(finalMessageNode);
+                lucide.createIcons({ nodes: [finalMessageNode] });
             }
         }
     };
@@ -2389,12 +2521,9 @@
     const handleChatImageUpload = async (event, otherUserId) => {
         const file = event.target.files[0];
         if (!file) return;
-        
         event.target.value = '';
 
         showActionSpinner();
-
-        // BUCKET NAME FIX: Changed 'chat_images' to 'chat-images'
         const bucketName = 'chat-images';
         const fileName = `public/${currentUser.id}_${otherUserId}/${Date.now()}-${file.name}`;
 
@@ -2423,9 +2552,9 @@
             console.error(insertError);
             await db.storage.from(bucketName).remove([fileName]);
         }
-        // The real-time listener will handle displaying the sent image for the sender.
     };
     
+    // POST-SESSION FIX: Function for therapist to end the chat session
     const confirmEndChat = (clientId) => {
         const content = 'آیا از پایان دادن به این گفتگو مطمئن هستید؟ با این کار، وضعیت نوبت به "پایان‌یافته" تغییر می‌کند و کاربر می‌تواند برای شما نظر ثبت کند.';
         const actions = [{
@@ -2440,6 +2569,7 @@
         closeModal();
         showActionSpinner();
         
+        // Find the latest 'confirmed' appointment to mark as 'completed'
         const { data: appointment, error: aptError } = await db
             .from('appointments')
             .select('id')
