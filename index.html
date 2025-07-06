@@ -109,19 +109,19 @@
         }
 
         #loading-spinner {
-            display: none; /* Hidden by default */
-        }
-        #loading-spinner.visible {
+            /* This is now a full-page loader, visible by default */
             display: flex;
         }
-        #loading-spinner .loader {
+        #loading-spinner .loader, #action-spinner .loader {
             width: 50px;
             height: 50px;
             display: grid;
             animation: s4 4s infinite;
         }
         #loading-spinner .loader::before,
-        #loading-spinner .loader::after {
+        #loading-spinner .loader::after,
+        #action-spinner .loader::before,
+        #action-spinner .loader::after {
             content: "";
             grid-area: 1/1;
             border: 8px solid;
@@ -130,7 +130,8 @@
             mix-blend-mode: darken;
             animation: s4 1s infinite linear;
         }
-        #loading-spinner .loader::after {
+        #loading-spinner .loader::after,
+        #action-spinner .loader::after {
             border-color: #0000 #0000 #3b82f6 #3b82f6;
             animation-direction: reverse;
         }
@@ -150,11 +151,17 @@
         .star-rating .star.selected {
             color: #f59e0b; /* amber-500 */
         }
+
+        /* Chat tick styles */
+        .chat-ticks {
+            display: inline-block;
+            margin-left: 4px;
+        }
     </style>
 </head>
-<body class="bg-gray-100">
+<body class="bg-white">
 
-    <!-- LOGIN PERSISTENCE FIX: Spinner is visible by default -->
+    <!-- LOGIN PERSISTENCE FIX: Spinner is visible by default and covers the whole screen -->
     <div id="loading-spinner" class="fixed inset-0 bg-white z-50 flex items-center justify-center">
         <div class="loader"></div>
     </div>
@@ -296,9 +303,17 @@
         }
     };
 
-
-    const showLoading = () => document.getElementById('loading-spinner').classList.add('visible');
-    const hideLoading = () => document.getElementById('loading-spinner').classList.remove('visible');
+    // Use a separate loading indicator for async actions within the app
+    const showActionSpinner = () => {
+        const spinner = document.createElement('div');
+        spinner.id = 'action-spinner';
+        spinner.className = 'fixed inset-0 bg-white/50 z-[4000] flex items-center justify-center backdrop-blur-sm';
+        spinner.innerHTML = `<div class="loader"></div>`;
+        document.body.appendChild(spinner);
+    }
+    const hideActionSpinner = () => {
+        document.getElementById('action-spinner')?.remove();
+    }
 
     const showModal = (title, content, actions = []) => {
         const modalContainer = document.getElementById('modal-container');
@@ -329,7 +344,7 @@
             info: 'bg-blue-500'
         };
         const toast = document.createElement('div');
-        toast.className = `fixed top-5 right-5 ${toastColors[type]} text-white py-2 px-4 rounded-lg shadow-lg z-[3000]`;
+        toast.className = `fixed top-5 right-5 ${toastColors[type]} text-white py-2 px-4 rounded-lg shadow-lg z-[5000]`;
         toast.textContent = message;
         document.body.appendChild(toast);
         setTimeout(() => {
@@ -414,22 +429,20 @@
 
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        showLoading();
+        showActionSpinner();
         const email = document.getElementById('login-email').value;
         const password = document.getElementById('login-password').value;
         const { error } = await db.auth.signInWithPassword({ email, password });
         if (error) {
+            hideActionSpinner();
             showToast(`خطا در ورود: ${error.message}`, 'error');
-        } else {
-            showToast('با موفقیت وارد شدید!', 'success');
-            // onAuthStateChange will hide the loading spinner and navigate
         }
-        // Don't hide loading here, onAuthStateChange will handle it.
+        // On success, onAuthStateChange will hide the spinner.
     });
 
     signupForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        showLoading();
+        showActionSpinner();
         const email = document.getElementById('signup-email').value;
         const password = document.getElementById('signup-password').value;
         const fullName = document.getElementById('signup-fullname').value;
@@ -446,7 +459,7 @@
             }
         });
         
-        hideLoading();
+        hideActionSpinner();
         if (error) {
             showToast(`خطا در ثبت‌نام: ${error.message}`, 'error');
         } else {
@@ -459,42 +472,38 @@
     });
 
     const handleLogout = async () => {
-        showLoading();
+        document.getElementById('loading-spinner').style.display = 'flex';
+        appContainer.classList.add('hidden');
         const { error } = await db.auth.signOut();
         if (error) {
             showToast(`خطا در خروج: ${error.message}`, 'error');
-            hideLoading();
         }
-        // onAuthStateChange will handle UI changes and hiding the spinner
+        // onAuthStateChange will handle the rest.
     };
 
     // =================================================================
-    // APP INITIALIZATION & ROUTING
+    // APP INITIALIZATION & ROUTING (LOGIN PERSISTENCE FIX)
     // =================================================================
 
-    // LOGIN PERSISTENCE FIX: Reworked logic for a smoother startup.
     db.auth.onAuthStateChange(async (event, session) => {
+        const loadingSpinner = document.getElementById('loading-spinner');
         try {
             if (session && session.user) {
-                // User is logged in, fetch profile and show the app.
                 currentUser = session.user;
                 const { data, error } = await db.from('profiles').select('*').eq('id', currentUser.id).single();
 
                 if (error || !data) {
                     console.error("Critical: Profile fetch failed.", error);
-                    showToast('خطا در بارگذاری اطلاعات. لطفاً دوباره وارد شوید.', 'error');
-                    await handleLogout(); 
+                    await db.auth.signOut();
                     return;
                 }
 
                 userProfile = data;
-                authPage.classList.remove('active');
-                authPage.classList.add('hidden');
-                appContainer.classList.remove('hidden');
                 await setupUIForRole(userProfile.role);
+                appContainer.classList.remove('hidden');
+                authPage.classList.add('hidden');
 
             } else {
-                // User is not logged in, show the login page.
                 currentUser = null;
                 userProfile = null;
                 if (chatSubscription) {
@@ -504,18 +513,17 @@
                 appContainer.classList.add('hidden');
                 authPage.classList.remove('hidden');
                 authPage.classList.add('active');
-                document.getElementById('login-form-container').classList.remove('hidden');
-                document.getElementById('signup-form-container').classList.add('hidden');
             }
         } catch (err) {
             console.error("Fatal error in onAuthStateChange:", err);
             showToast('یک خطای پیش‌بینی نشده رخ داد.', 'error');
+            appContainer.classList.add('hidden');
             authPage.classList.remove('hidden');
             authPage.classList.add('active');
-            appContainer.classList.add('hidden');
         } finally {
-            // Hide the main loading spinner after everything is decided and rendered.
-            hideLoading();
+            // FIX: Hide both the main loader and any action spinner that might have been left open.
+            loadingSpinner.style.display = 'none';
+            hideActionSpinner();
         }
     });
 
@@ -600,7 +608,6 @@
 
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
 
-        // OPTIMIZATION: Show a loader while the iframe content is loading.
         page.innerHTML = `
             <header class="bg-white shadow-sm p-4 flex items-center gap-4 flex-shrink-0">
                 <button onclick="goBackFromTraining()" class="text-gray-600"><i data-lucide="arrow-right"></i></button>
@@ -621,13 +628,11 @@
         const iframe = document.getElementById('training-iframe');
         const loader = document.getElementById('training-loader');
 
-        // Hide the loader and show the iframe only after it has fully loaded.
         iframe.onload = () => {
             loader.style.display = 'none';
             iframe.style.visibility = 'visible';
         };
         
-        // Set the src to start loading the content.
         iframe.src = "https://vids.psynoland.ir/";
         
         document.querySelectorAll('.nav-item').forEach(item => {
@@ -851,9 +856,9 @@
     };
 
     const submitMood = async (score) => {
-        showLoading();
+        showActionSpinner();
         const { error } = await db.from('mood_entries').insert({ user_id: currentUser.id, mood_score: score });
-        hideLoading();
+        hideActionSpinner();
         if (error) {
             showToast('امروز قبلا حال خود را ثبت کرده‌اید.', 'error');
         } else {
@@ -929,9 +934,9 @@
             showToast('لطفاً متنی را وارد کنید.', 'error');
             return;
         }
-        showLoading();
+        showActionSpinner();
         const { error } = await db.from('journal_entries').insert({ user_id: currentUser.id, content: content });
-        hideLoading();
+        hideActionSpinner();
         if (error) {
             showToast('خطا در ذخیره یادداشت.', 'error');
         } else {
@@ -1002,9 +1007,9 @@
             return;
         }
         closeModal();
-        showLoading();
+        showActionSpinner();
         const { error } = await db.from('journal_entries').update({ content: newContent }).eq('id', entryId);
-        hideLoading();
+        hideActionSpinner();
         if (error) {
             showToast('خطا در به‌روزرسانی یادداشت.', 'error');
         } else {
@@ -1025,9 +1030,9 @@
 
     const deleteJournalEntry = async (entryId) => {
         closeModal();
-        showLoading();
+        showActionSpinner();
         const { error } = await db.from('journal_entries').delete().eq('id', entryId);
-        hideLoading();
+        hideActionSpinner();
         if (error) {
             showToast('خطا در حذف یادداشت.', 'error');
         } else {
@@ -1183,14 +1188,14 @@
         }
 
         const resultText = test.interpretation(score);
-        showLoading();
+        showActionSpinner();
         const { error } = await db.from('test_results').insert({
             user_id: currentUser.id,
             test_name: test.name,
             score: score,
             result_text: resultText
         });
-        hideLoading();
+        hideActionSpinner();
         if(error){
             showToast('خطا در ذخیره نتیجه تست.', 'error');
         } else {
@@ -1209,7 +1214,6 @@
     // --- CLIENT: APPOINTMENTS (REWORKED) ---
     const renderClientAppointments = async () => {
         const page = document.getElementById('client-appointments-page');
-        showLoading();
         page.innerHTML = `
             <div>
                 <h1 class="text-2xl font-bold text-gray-800 mb-6">نوبت‌های من</h1>
@@ -1224,9 +1228,10 @@
                 </div>
             </div>
         `;
+        showActionSpinner();
         await loadClientAppointments();
         await renderTherapistListForBooking();
-        hideLoading();
+        hideActionSpinner();
         lucide.createIcons();
     };
     
@@ -1350,7 +1355,7 @@
     };
 
     const showAvailableSlots = async (therapistId) => {
-        showLoading();
+        showActionSpinner();
         const { data: slots, error } = await db
             .from('available_slots')
             .select('*')
@@ -1359,7 +1364,7 @@
             .order('start_time', { ascending: true });
         
         const { data: therapist, error: tError } = await db.from('profiles').select('full_name').eq('id', therapistId).single();
-        hideLoading();
+        hideActionSpinner();
 
         if (error || tError) {
             showToast('خطا در دریافت زمان‌های خالی.', 'error');
@@ -1407,13 +1412,13 @@
         const slotId = selectedSlot.value;
         
         closeModal();
-        showLoading();
+        showActionSpinner();
 
         const { data, error } = await db.rpc('book_appointment_slot', {
             slot_id_arg: slotId
         });
 
-        hideLoading();
+        hideActionSpinner();
 
         if (error) {
             if (error.message.includes('SLOT_ALREADY_BOOKED')) {
@@ -1434,16 +1439,16 @@
     };
     
     const cancelAppointment = async (id, slotId) => {
-        showLoading();
+        showActionSpinner();
         const { error: apptError } = await db.from('appointments').update({ status: 'cancelled' }).eq('id', id);
         if (apptError) {
-            hideLoading();
+            hideActionSpinner();
             showToast('خطا در لغو نوبت.', 'error');
             return;
         }
         
         const { error: slotError } = await db.from('available_slots').update({ is_booked: false }).eq('id', slotId);
-        hideLoading();
+        hideActionSpinner();
         
         if(slotError) {
             showToast('نوبت لغو شد، اما در آزاد کردن زمان خطایی رخ داد.', 'info');
@@ -1492,7 +1497,7 @@
         }
         
         closeModal();
-        showLoading();
+        showActionSpinner();
 
         const { error } = await db.from('reviews').insert({
             appointment_id: appointmentId,
@@ -1503,12 +1508,12 @@
         });
 
         if (error) {
-            hideLoading();
+            hideActionSpinner();
             showToast('خطا در ثبت نظر. شاید قبلا نظر خود را ثبت کرده باشید.', 'error');
             console.error(error);
         } else {
             const { error: rpcError } = await db.rpc('update_therapist_rating', { therapist_id_arg: therapistId });
-            hideLoading();
+            hideActionSpinner();
             if (rpcError) {
                  showToast('نظر شما ثبت شد اما در به‌روزرسانی امتیاز مشکلی پیش آمد.', 'info');
                  console.error("RPC Error:", rpcError);
@@ -1569,7 +1574,7 @@
                         </div>
                     </a>
                 </div>
-                <p class="text-center text-gray-400 text-sm">نسخه ۱.۷.۰</p>
+                <p class="text-center text-gray-400 text-sm">نسخه ۱.۹.۰</p>
             </div>
         `;
         renderAvatar(document.getElementById('profile-page-avatar'), userProfile.avatar_url);
@@ -1597,12 +1602,12 @@
             const newBio = document.getElementById('modal-bio-input').value;
             
             closeModal(); 
-            showLoading();
+            showActionSpinner();
             const { data, error } = await db.from('profiles').update({ 
                 full_name: newName,
                 bio: newBio
             }).eq('id', currentUser.id).select().single();
-            hideLoading();
+            hideActionSpinner();
             
             if (error) {
                 showToast('خطا در به‌روزرسانی پروفایل.', 'error');
@@ -1618,7 +1623,7 @@
         const file = event.target.files[0];
         if (!file) return;
 
-        showLoading();
+        showActionSpinner();
         const fileName = `${currentUser.id}/${Date.now()}-${file.name}`;
         
         if (userProfile.avatar_url) {
@@ -1630,7 +1635,7 @@
 
         const { error: uploadError } = await db.storage.from('avatars').upload(fileName, file);
         if (uploadError) {
-            hideLoading();
+            hideActionSpinner();
             showToast('خطا در آپلود تصویر.', 'error');
             console.error(uploadError);
             return;
@@ -1639,7 +1644,7 @@
         const { data: urlData } = db.storage.from('avatars').getPublicUrl(fileName);
         const { error: updateError } = await db.from('profiles').update({ avatar_url: urlData.publicUrl }).eq('id', currentUser.id);
         
-        hideLoading();
+        hideActionSpinner();
         if (updateError) {
             showToast('خطا در ذخیره آدرس تصویر.', 'error');
         } else {
@@ -1667,12 +1672,12 @@
     };
 
     const viewTestHistory = async () => {
-        showLoading();
+        showActionSpinner();
         const { data, error } = await db.from('test_results')
             .select('*')
             .eq('user_id', currentUser.id)
             .order('created_at', { ascending: false });
-        hideLoading();
+        hideActionSpinner();
 
         if (error) {
             showToast('خطا در دریافت تاریخچه تست‌ها', 'error');
@@ -1705,7 +1710,7 @@
     // --- THERAPIST: DASHBOARD ---
     const renderTherapistDashboard = async () => {
         const page = document.getElementById('therapist-dashboard-page');
-        showLoading();
+        showActionSpinner();
         
         const { data: pendingAppointments, error: pendingError } = await db
             .from('appointments')
@@ -1721,7 +1726,7 @@
 
         const { data: clients, error: clientError } = await db.rpc('get_unique_clients_for_therapist', { therapist_id_arg: currentUser.id });
         
-        hideLoading();
+        hideActionSpinner();
 
         page.innerHTML = `
             <div class="space-y-6">
@@ -1786,12 +1791,12 @@
     };
 
     const handleAppointmentConfirmation = async (appointmentId, isConfirmed, slotId) => {
-        showLoading();
+        showActionSpinner();
         const newStatus = isConfirmed ? 'confirmed' : 'declined';
         const { error: updateError } = await db.from('appointments').update({ status: newStatus }).eq('id', appointmentId);
 
         if (updateError) {
-            hideLoading();
+            hideActionSpinner();
             showToast('خطا در پردازش درخواست.', 'error');
             return;
         }
@@ -1800,7 +1805,7 @@
             await db.from('available_slots').update({ is_booked: false }).eq('id', slotId);
         }
         
-        hideLoading();
+        hideActionSpinner();
         showToast(`نوبت با موفقیت ${isConfirmed ? 'تایید' : 'رد'} شد.`, 'success');
         await renderTherapistDashboard();
     };
@@ -1809,7 +1814,6 @@
     // --- THERAPIST: CLIENTS ---
     const renderTherapistClients = async () => {
         const page = document.getElementById('therapist-clients-page');
-        showLoading();
         page.innerHTML = `
             <div>
                 <h1 class="text-2xl font-bold text-gray-800 mb-6">لیست مراجعین</h1>
@@ -1817,7 +1821,7 @@
                     <p class="text-center text-gray-500">در حال بارگذاری لیست مراجعین...</p>
                 </div>
             </div>`;
-
+        showActionSpinner();
         try {
             const { data: clients, error: rpcError } = await db.rpc('get_unique_clients_for_therapist', { therapist_id_arg: currentUser.id });
 
@@ -1852,14 +1856,14 @@
             console.error("Error loading clients:", error);
             document.getElementById('client-list-container').innerHTML = `<p class="text-red-500 text-center">خطا در بارگذاری لیست مراجعین.</p>`;
         } finally {
-            hideLoading();
+            hideActionSpinner();
             lucide.createIcons();
         }
     };
 
 
     const viewClientDetails = async (clientId) => {
-        showLoading();
+        showActionSpinner();
         try {
             const { data: profile, error: pError } = await db.from('profiles').select('full_name, bio').eq('id', clientId).single();
             if (pError) throw pError;
@@ -1870,7 +1874,7 @@
             const { data: tests, error: tError } = await db.from('test_results').select('*').eq('user_id', clientId).order('created_at', {ascending: false}).limit(5);
             if (tError) throw tError;
 
-            hideLoading();
+            hideActionSpinner();
 
             let content = `<div class="space-y-4">
                 ${profile.bio ? `<div><h4 class="font-bold text-md mb-2">بیوگرافی مراجع</h4><p class="text-sm bg-gray-100 p-2 rounded-lg">${profile.bio}</p></div>` : ''}
@@ -1921,7 +1925,7 @@
                 });
             }
         } catch (error) {
-            hideLoading();
+            hideActionSpinner();
             console.error("Error in viewClientDetails:", error);
             showToast(`خطا در بارگذاری جزئیات: ${error.message}`, 'error');
         }
@@ -1988,13 +1992,13 @@
 
         const startTimeString = `${dateStr} - ${timeStr}`;
 
-        showLoading();
+        showActionSpinner();
         const { error } = await db.from('available_slots').insert({
             therapist_id: currentUser.id,
             start_time: startTimeString,
             type: type
         });
-        hideLoading();
+        hideActionSpinner();
 
         if (error) {
             showToast('خطا در افزودن زمان.', 'error');
@@ -2041,9 +2045,9 @@
     };
 
     const deleteAvailableSlot = async (slotId) => {
-        showLoading();
+        showActionSpinner();
         const { error } = await db.from('available_slots').delete().eq('id', slotId);
-        hideLoading();
+        hideActionSpinner();
         if (error) {
             showToast('خطا در حذف زمان.', 'error');
         } else {
@@ -2107,13 +2111,13 @@
         const newBio = document.getElementById('therapist-bio-input').value;
         const newSpec = document.getElementById('therapist-specialization-input').value;
 
-        showLoading();
+        showActionSpinner();
         const { data, error } = await db.from('profiles').update({ 
             full_name: newName,
             bio: newBio,
             specialization: newSpec,
         }).eq('id', currentUser.id).select().single();
-        hideLoading();
+        hideActionSpinner();
         
         if (error) {
             showToast('خطا در به‌روزرسانی پروفایل.', 'error');
@@ -2164,8 +2168,16 @@
 
 
     // =================================================================
-    // SHARED: CHAT PAGE (UPGRADED)
+    // SHARED: CHAT PAGE (UPGRADED WITH OPTIMISTIC UI & TICKS)
     // =================================================================
+    /**
+     * نکته مهم برای سیستم تیک در چت
+     * برای فعال‌سازی کامل سیستم دو تیک (خوانده شدن پیام)، باید یک ستون جدید
+     * در جدول `chat_messages` خود در Supabase اضافه کنید:
+     * * - نام ستون: is_read
+     * - نوع ستون: boolean
+     * - مقدار پیش‌فرض (Default Value): false
+     */
     const startChatWith = async (otherUserId) => {
         const page = document.getElementById('chat-page');
         const { data: otherUser, error } = await db.from('profiles').select('id, full_name, avatar_url').eq('id', otherUserId).single();
@@ -2219,17 +2231,34 @@
         chatImageUpload.onchange = boundImageUpload;
         
         await loadMessages(otherUserId, messageContainer);
+        await markMessagesAsRead(otherUserId);
 
         if (chatSubscription) chatSubscription.unsubscribe();
 
         chatSubscription = db.channel('public:chat_messages')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, 
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, 
             (payload) => {
                 const newMessage = payload.new;
-                if ((newMessage.sender_id === otherUserId && newMessage.receiver_id === currentUser.id) || 
-                    (newMessage.sender_id === currentUser.id && newMessage.receiver_id === otherUserId)) {
+                const isRelevant = (newMessage.sender_id === otherUserId && newMessage.receiver_id === currentUser.id) || 
+                                   (newMessage.sender_id === currentUser.id && newMessage.receiver_id === otherUserId);
+
+                if (!isRelevant) return;
+
+                if (payload.eventType === 'INSERT' && newMessage.sender_id === otherUserId) {
                     messageContainer.innerHTML += renderMessage(newMessage);
                     messageContainer.scrollTop = messageContainer.scrollHeight;
+                    markMessagesAsRead(otherUserId); // Mark as read as soon as it's received
+                } else if (payload.eventType === 'UPDATE') {
+                    const messageEl = document.querySelector(`[data-message-id='${newMessage.id}']`);
+                    if (messageEl) {
+                        const ticksEl = messageEl.querySelector('.chat-ticks');
+                        if (ticksEl && newMessage.is_read) {
+                            ticksEl.innerHTML = getTickHTML('read');
+                            lucide.createIcons({
+                                nodes: [ticksEl]
+                            });
+                        }
+                    }
                 }
             })
             .subscribe();
@@ -2244,24 +2273,42 @@
         navigateTo(lastPageId);
     };
 
+    const getTickHTML = (status) => {
+        if (status === 'read') {
+            return '<i data-lucide="check-check" class="w-4 h-4 text-blue-400"></i>';
+        }
+        if (status === 'sent') {
+            return '<i data-lucide="check" class="w-4 h-4"></i>';
+        }
+        // 'sending' status
+        return '<i data-lucide="clock" class="w-4 h-4"></i>';
+    };
+
     const renderMessage = (msg) => {
         const isMe = msg.sender_id === currentUser.id;
         const time = new Date(msg.created_at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
         let messageContentHTML = '';
-        let bubbleClasses = 'px-4 py-2'; // Default padding for text
+        let bubbleClasses = 'px-4 py-2';
 
         if (msg.image_url) {
-            bubbleClasses = 'p-1'; // Less padding for image bubbles
+            bubbleClasses = 'p-1';
             messageContentHTML = `<img src="${msg.image_url}" class="rounded-lg max-w-full h-auto" style="max-height: 250px;" alt="تصویر ارسال شده" onload="this.closest('#chat-messages').scrollTop = this.closest('#chat-messages').scrollHeight">`;
         } else {
             messageContentHTML = `<p class="whitespace-pre-wrap">${msg.message_text}</p>`;
         }
+        
+        let tickStatus = 'sent';
+        if (msg.is_read) tickStatus = 'read';
+        if (msg.optimisticStatus) tickStatus = msg.optimisticStatus;
 
         return `
-            <div class="flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}">
+            <div class="flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}" data-message-id="${msg.id}">
                 <div class="max-w-xs lg:max-w-md ${bubbleClasses} rounded-2xl ${isMe ? 'bg-teal-500 text-white rounded-br-lg' : 'bg-gray-200 text-gray-800 rounded-bl-lg'}">
                     ${messageContentHTML}
-                    <p class="text-xs mt-1 ${isMe ? 'text-white/70' : 'text-gray-500'} text-left">${time}</p>
+                    <div class="text-xs mt-1 ${isMe ? 'text-white/70' : 'text-gray-500'} text-left flex items-center justify-end">
+                        <span>${time}</span>
+                        ${isMe ? `<span class="chat-ticks">${getTickHTML(tickStatus)}</span>` : ''}
+                    </div>
                 </div>
             </div>
         `;
@@ -2276,6 +2323,7 @@
         
         if(messages) {
             messageContainer.innerHTML = messages.map(renderMessage).join('');
+            lucide.createIcons();
             messageContainer.scrollTop = messageContainer.scrollHeight;
         }
     };
@@ -2283,18 +2331,58 @@
     const handleSendMessage = async (otherUserId, chatInput) => {
         const messageText = chatInput.value.trim();
         if (!messageText) return;
-        chatInput.value = '';
-
-        const { error } = await db.from('chat_messages').insert({
+        
+        const tempId = `temp_${Date.now()}`;
+        const optimisticMessage = {
+            id: tempId,
             sender_id: currentUser.id,
             receiver_id: otherUserId,
-            message_text: messageText
-        });
+            message_text: messageText,
+            created_at: new Date().toISOString(),
+            optimisticStatus: 'sending' // Custom flag for UI
+        };
 
-        if (error) {
-            console.error('Error sending message:', error);
-            showToast('پیام ارسال نشد.', 'error');
-            chatInput.value = messageText; // Restore message on failure
+        // Optimistic UI update
+        const messageContainer = document.getElementById('chat-messages');
+        const tempMessageEl = document.createElement('div');
+        tempMessageEl.innerHTML = renderMessage(optimisticMessage);
+        messageContainer.appendChild(tempMessageEl.firstChild);
+        messageContainer.scrollTop = messageContainer.scrollHeight;
+        lucide.createIcons();
+        chatInput.value = '';
+
+        // Actual DB insert
+        const { data, error } = await db.from('chat_messages').insert({
+            sender_id: optimisticMessage.sender_id,
+            receiver_id: optimisticMessage.receiver_id,
+            message_text: optimisticMessage.message_text,
+            is_read: false // Explicitly set
+        }).select().single();
+
+        // Update the optimistic message with real data
+        const finalMessageEl = document.querySelector(`[data-message-id='${tempId}']`);
+        if (finalMessageEl) {
+            if (error) {
+                console.error('Error sending message:', error);
+                showToast('پیام ارسال نشد.', 'error');
+                finalMessageEl.classList.add('opacity-50'); // Show error state
+            } else {
+                // Replace temp element with final one from DB
+                finalMessageEl.outerHTML = renderMessage(data);
+                lucide.createIcons();
+            }
+        }
+    };
+
+    const markMessagesAsRead = async (otherUserId) => {
+        try {
+            await db.from('chat_messages')
+                .update({ is_read: true })
+                .eq('sender_id', otherUserId)
+                .eq('receiver_id', currentUser.id)
+                .eq('is_read', false);
+        } catch (error) {
+            console.error("Error marking messages as read:", error);
         }
     };
 
@@ -2304,17 +2392,7 @@
         
         event.target.value = '';
 
-        const messageContainer = document.getElementById('chat-messages');
-        const uploadPlaceholderId = `upload-${Date.now()}`;
-        const placeholderHTML = `
-            <div id="${uploadPlaceholderId}" class="flex items-end gap-2 justify-end">
-                <div class="max-w-xs p-2 rounded-2xl bg-teal-200 text-teal-800 rounded-br-lg">
-                    <p class="text-sm">...در حال آپلود تصویر</p>
-                </div>
-            </div>
-        `;
-        messageContainer.innerHTML += placeholderHTML;
-        messageContainer.scrollTop = messageContainer.scrollHeight;
+        showActionSpinner();
 
         // BUCKET NAME FIX: Changed 'chat_images' to 'chat-images'
         const bucketName = 'chat-images';
@@ -2323,8 +2401,8 @@
         const { error: uploadError } = await db.storage.from(bucketName).upload(fileName, file);
 
         if (uploadError) {
+            hideActionSpinner();
             showToast('خطا در آپلود تصویر.', 'error');
-            document.getElementById(uploadPlaceholderId)?.remove();
             console.error(uploadError);
             return;
         }
@@ -2334,16 +2412,18 @@
         const { error: insertError } = await db.from('chat_messages').insert({
             sender_id: currentUser.id,
             receiver_id: otherUserId,
-            image_url: urlData.publicUrl
+            image_url: urlData.publicUrl,
+            is_read: false
         });
-
-        document.getElementById(uploadPlaceholderId)?.remove();
+        
+        hideActionSpinner();
 
         if (insertError) {
             showToast('خطا در ارسال تصویر.', 'error');
             console.error(insertError);
             await db.storage.from(bucketName).remove([fileName]);
         }
+        // The real-time listener will handle displaying the sent image for the sender.
     };
     
     const confirmEndChat = (clientId) => {
@@ -2358,7 +2438,7 @@
 
     const endChat = async (clientId) => {
         closeModal();
-        showLoading();
+        showActionSpinner();
         
         const { data: appointment, error: aptError } = await db
             .from('appointments')
@@ -2371,7 +2451,7 @@
             .single();
 
         if (aptError || !appointment) {
-            hideLoading();
+            hideActionSpinner();
             showToast('نوبت تایید شده‌ای برای این کاربر یافت نشد.', 'error');
             return;
         }
@@ -2381,7 +2461,7 @@
             .update({ status: 'completed' })
             .eq('id', appointment.id);
 
-        hideLoading();
+        hideActionSpinner();
         if (updateError) {
             showToast('خطا در پایان دادن به گفتگو.', 'error');
         } else {
