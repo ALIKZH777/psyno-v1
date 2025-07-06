@@ -51,7 +51,7 @@
 
         .page.active {
             display: block;
-            animation: slideIn 0.3s ease-out forwards;
+            animation: fadeIn 0.3s ease-out forwards;
         }
         
         .page.active.flex-layout {
@@ -74,9 +74,9 @@
             transform: translateY(100%);
         }
 
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
         
         .modal-backdrop {
@@ -154,13 +154,15 @@
 </head>
 <body class="bg-gray-100">
 
-    <div id="loading-spinner" class="fixed inset-0 bg-white/80 z-50 items-center justify-center backdrop-blur-sm">
+    <!-- LOGIN PERSISTENCE FIX: Spinner is visible by default -->
+    <div id="loading-spinner" class="fixed inset-0 bg-white z-50 flex items-center justify-center">
         <div class="loader"></div>
     </div>
 
     <div id="modal-container" class="modal-backdrop"></div>
 
-    <div id="auth-page" class="page bg-gradient-to-br from-teal-400 to-blue-500">
+    <!-- LOGIN PERSISTENCE FIX: Auth page is hidden by default -->
+    <div id="auth-page" class="page hidden bg-gradient-to-br from-teal-400 to-blue-500">
         <div class="w-full h-full flex items-center justify-center">
             <div class="w-full max-w-md m-auto p-8">
                 <div class="text-center mb-10">
@@ -257,7 +259,15 @@
     // INITIALIZATION
     // =================================================================
     const { createClient } = supabase;
-    const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // LOGIN PERSISTENCE FIX: Explicitly configure session persistence.
+    const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+            storage: window.localStorage,
+        },
+    });
     
     let currentUser = null;
     let userProfile = null;
@@ -293,7 +303,7 @@
     const showModal = (title, content, actions = []) => {
         const modalContainer = document.getElementById('modal-container');
         const modalHTML = `
-            <div class="modal-content animate-fade-in-up">
+            <div class="modal-content">
                 <h3 class="text-lg font-bold text-gray-800 mb-4">${title}</h3>
                 <div class="text-gray-600">${content}</div>
                 <div class="flex justify-end gap-2 mt-6">
@@ -319,7 +329,7 @@
             info: 'bg-blue-500'
         };
         const toast = document.createElement('div');
-        toast.className = `fixed top-5 right-5 ${toastColors[type]} text-white py-2 px-4 rounded-lg shadow-lg z-[3000] animate-slide-in-right`;
+        toast.className = `fixed top-5 right-5 ${toastColors[type]} text-white py-2 px-4 rounded-lg shadow-lg z-[3000]`;
         toast.textContent = message;
         document.body.appendChild(toast);
         setTimeout(() => {
@@ -410,11 +420,11 @@
         const { error } = await db.auth.signInWithPassword({ email, password });
         if (error) {
             showToast(`خطا در ورود: ${error.message}`, 'error');
-            hideLoading();
         } else {
             showToast('با موفقیت وارد شدید!', 'success');
-            // onAuthStateChange will handle the rest
+            // onAuthStateChange will hide the loading spinner and navigate
         }
+        // Don't hide loading here, onAuthStateChange will handle it.
     });
 
     signupForm.addEventListener('submit', async (e) => {
@@ -462,55 +472,50 @@
     // APP INITIALIZATION & ROUTING
     // =================================================================
 
+    // LOGIN PERSISTENCE FIX: Reworked logic for a smoother startup.
     db.auth.onAuthStateChange(async (event, session) => {
         try {
-            if (session) { // User is logged in or session restored
-                if (currentUser && currentUser.id === session.user.id && userProfile) {
-                    return; // Already initialized
-                }
-                showLoading();
+            if (session && session.user) {
+                // User is logged in, fetch profile and show the app.
                 currentUser = session.user;
                 const { data, error } = await db.from('profiles').select('*').eq('id', currentUser.id).single();
 
                 if (error || !data) {
-                    console.warn("Profile not found on first attempt, retrying...");
-                    await new Promise(resolve => setTimeout(resolve, 1500)); 
-                    const { data: retryData, error: retryError } = await db.from('profiles').select('*').eq('id', currentUser.id).single();
-                    if (retryError || !retryData) {
-                         throw new Error(`خطا در دریافت پروفایل پس از تلاش مجدد: ${retryError?.message || 'پروفایل یافت نشد'}`);
-                    }
-                    userProfile = retryData;
-                } else {
-                    userProfile = data;
+                    console.error("Critical: Profile fetch failed.", error);
+                    showToast('خطا در بارگذاری اطلاعات. لطفاً دوباره وارد شوید.', 'error');
+                    await handleLogout(); 
+                    return;
                 }
-                
+
+                userProfile = data;
                 authPage.classList.remove('active');
+                authPage.classList.add('hidden');
                 appContainer.classList.remove('hidden');
                 await setupUIForRole(userProfile.role);
-                hideLoading();
 
-            } else { // User is logged out or no session
+            } else {
+                // User is not logged in, show the login page.
                 currentUser = null;
                 userProfile = null;
                 if (chatSubscription) {
                     chatSubscription.unsubscribe();
                     chatSubscription = null;
                 }
-                authPage.classList.add('active');
                 appContainer.classList.add('hidden');
+                authPage.classList.remove('hidden');
+                authPage.classList.add('active');
                 document.getElementById('login-form-container').classList.remove('hidden');
                 document.getElementById('signup-form-container').classList.add('hidden');
-                appContainer.querySelectorAll('.page').forEach(p => {
-                    p.innerHTML = '';
-                    p.classList.remove('active');
-                });
-                hideLoading();
             }
         } catch (err) {
-            console.error("خطای احراز هویت:", err);
-            showToast(`خطا: ${err.message}`, 'error');
+            console.error("Fatal error in onAuthStateChange:", err);
+            showToast('یک خطای پیش‌بینی نشده رخ داد.', 'error');
+            authPage.classList.remove('hidden');
+            authPage.classList.add('active');
+            appContainer.classList.add('hidden');
+        } finally {
+            // Hide the main loading spinner after everything is decided and rendered.
             hideLoading();
-            await handleLogout(); // Attempt to sign out to reset state
         }
     });
 
@@ -582,7 +587,7 @@
     };
 
     // =================================================================
-    // NEW: TRAINING SECTION
+    // OPTIMIZED: TRAINING SECTION
     // =================================================================
     const navigateToTraining = () => {
         const page = document.getElementById('training-page');
@@ -595,18 +600,35 @@
 
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
 
+        // OPTIMIZATION: Show a loader while the iframe content is loading.
         page.innerHTML = `
             <header class="bg-white shadow-sm p-4 flex items-center gap-4 flex-shrink-0">
                 <button onclick="goBackFromTraining()" class="text-gray-600"><i data-lucide="arrow-right"></i></button>
                 <h1 class="font-bold text-lg">بخش آموزش</h1>
             </header>
-            <iframe src="https://vids.psynoland.ir/" class="w-full border-0 flex-grow"></iframe>
+            <div id="training-content-area" class="flex-grow relative bg-gray-100">
+                <div id="training-loader" class="absolute inset-0 flex items-center justify-center">
+                    <div class="loader"></div>
+                </div>
+                <iframe id="training-iframe" class="w-full h-full border-0" style="visibility: hidden;"></iframe>
+            </div>
         `;
         lucide.createIcons();
         page.classList.add('active', 'flex-layout');
         page.style.padding = '0';
-
         navBar.classList.add('hidden');
+        
+        const iframe = document.getElementById('training-iframe');
+        const loader = document.getElementById('training-loader');
+
+        // Hide the loader and show the iframe only after it has fully loaded.
+        iframe.onload = () => {
+            loader.style.display = 'none';
+            iframe.style.visibility = 'visible';
+        };
+        
+        // Set the src to start loading the content.
+        iframe.src = "https://vids.psynoland.ir/";
         
         document.querySelectorAll('.nav-item').forEach(item => {
             item.classList.remove('text-teal-600');
@@ -617,7 +639,7 @@
     const goBackFromTraining = () => {
         const page = document.getElementById('training-page');
         page.classList.remove('active', 'flex-layout');
-        page.innerHTML = '';
+        page.innerHTML = ''; // Clear content to stop iframe
         page.style.padding = '';
 
         document.getElementById('bottom-nav-bar').classList.remove('hidden');
@@ -851,7 +873,7 @@
             .order('created_at', { ascending: true });
 
         if (error) {
-            console.error("Error loading mood data:", error);
+            console.error("Eror loading mood data:", error);
             return;
         }
 
@@ -1217,7 +1239,7 @@
                 status,
                 type,
                 therapist:therapist_id ( id, full_name, avatar_url ),
-                slot:slot_id ( start_time )
+                slot:slot_id ( id, start_time )
             `)
             .eq('client_id', currentUser.id)
             .order('created_at', { ascending: false });
@@ -1256,7 +1278,7 @@
                 actionButtons = `<button onclick="startChatWith('${apt.therapist.id}')" class="flex-1 bg-teal-500 text-white py-2 rounded-lg text-sm">ارتباط با روانشناس</button>`;
             }
             if (apt.status === 'pending' || apt.status === 'confirmed') {
-                actionButtons += `<button onclick="cancelAppointment(${apt.id}, ${apt.slot_id})" class="flex-1 bg-red-100 text-red-700 py-2 rounded-lg text-sm">لغو نوبت</button>`;
+                actionButtons += `<button onclick="cancelAppointment(${apt.id}, ${apt.slot.id})" class="flex-1 bg-red-100 text-red-700 py-2 rounded-lg text-sm">لغو نوبت</button>`;
             }
             if (apt.status === 'completed') {
                 actionButtons = `<button onclick="showRatingModal(${apt.id}, '${apt.therapist.id}')" class="flex-1 bg-amber-500 text-white py-2 rounded-lg text-sm">ثبت امتیاز و نظر</button>`;
@@ -1547,7 +1569,7 @@
                         </div>
                     </a>
                 </div>
-                <p class="text-center text-gray-400 text-sm">نسخه ۱.۵.۰</p>
+                <p class="text-center text-gray-400 text-sm">نسخه ۱.۷.۰</p>
             </div>
         `;
         renderAvatar(document.getElementById('profile-page-avatar'), userProfile.avatar_url);
@@ -1687,7 +1709,7 @@
         
         const { data: pendingAppointments, error: pendingError } = await db
             .from('appointments')
-            .select('id, type, client:client_id(id, full_name, avatar_url), slot:slot_id(start_time)', { count: 'exact' })
+            .select('id, type, client:client_id(id, full_name, avatar_url), slot:slot_id(id, start_time)', { count: 'exact' })
             .eq('therapist_id', currentUser.id)
             .eq('status', 'pending');
 
@@ -1744,8 +1766,8 @@
                             </div>
                         </div>
                         <div class="flex gap-2">
-                            <button onclick="handleAppointmentConfirmation(${apt.id}, true, ${apt.slot_id})" class="p-2 bg-green-100 rounded-lg text-green-600"><i data-lucide="check"></i></button>
-                            <button onclick="handleAppointmentConfirmation(${apt.id}, false, ${apt.slot_id})" class="p-2 bg-red-100 rounded-lg text-red-600"><i data-lucide="x"></i></button>
+                            <button onclick="handleAppointmentConfirmation(${apt.id}, true, ${apt.slot.id})" class="p-2 bg-green-100 rounded-lg text-green-600"><i data-lucide="check"></i></button>
+                            <button onclick="handleAppointmentConfirmation(${apt.id}, false, ${apt.slot.id})" class="p-2 bg-red-100 rounded-lg text-red-600"><i data-lucide="x"></i></button>
                         </div>
                     </div>
                 </div>
@@ -2142,7 +2164,7 @@
 
 
     // =================================================================
-    // SHARED: CHAT PAGE
+    // SHARED: CHAT PAGE (UPGRADED)
     // =================================================================
     const startChatWith = async (otherUserId) => {
         const page = document.getElementById('chat-page');
@@ -2167,6 +2189,10 @@
             <div id="chat-messages" class="flex-grow p-4 space-y-4 overflow-y-auto">
             </div>
             <footer class="bg-white p-2 flex items-center gap-2 border-t flex-shrink-0">
+                <label for="chat-image-upload" class="cursor-pointer p-2 text-gray-500 hover:text-teal-600 transition-colors">
+                    <i data-lucide="paperclip"></i>
+                </label>
+                <input id="chat-image-upload" type="file" class="hidden" accept="image/*">
                 <input id="chat-input" type="text" class="flex-grow bg-gray-100 rounded-full py-2 px-4 focus:outline-none" placeholder="پیام خود را بنویسید...">
                 <button id="send-chat-btn" class="bg-teal-500 text-white w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0">
                     <i data-lucide="send"></i>
@@ -2181,57 +2207,18 @@
         const messageContainer = document.getElementById('chat-messages');
         const sendBtn = document.getElementById('send-chat-btn');
         const chatInput = document.getElementById('chat-input');
-        
-        const renderMessage = (msg) => {
-            const isMe = msg.sender_id === currentUser.id;
-            const time = new Date(msg.created_at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
-            return `
-                <div class="flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}">
-                    <div class="max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${isMe ? 'bg-teal-500 text-white rounded-br-lg' : 'bg-gray-200 text-gray-800 rounded-bl-lg'}">
-                        <p>${msg.message_text}</p>
-                        <p class="text-xs mt-1 ${isMe ? 'text-white/70' : 'text-gray-500'} text-left">${time}</p>
-                    </div>
-                </div>
-            `;
-        };
+        const chatImageUpload = document.getElementById('chat-image-upload');
 
-        const loadMessages = async () => {
-            const { data: messages, error } = await db.from('chat_messages')
-                .select('*')
-                .in('sender_id', [currentUser.id, otherUserId])
-                .in('receiver_id', [currentUser.id, otherUserId])
-                .order('created_at', { ascending: true });
-            
-            if(messages) {
-                messageContainer.innerHTML = messages.map(renderMessage).join('');
-                messageContainer.scrollTop = messageContainer.scrollHeight;
-            }
-        };
+        const boundSendMessage = () => handleSendMessage(otherUserId, chatInput);
+        const boundImageUpload = (event) => handleChatImageUpload(event, otherUserId);
 
-        await loadMessages();
-
-        const handleSendMessage = async () => {
-            const messageText = chatInput.value.trim();
-            if (!messageText) return;
-
-            chatInput.value = '';
-
-            const { error } = await db.from('chat_messages').insert({
-                sender_id: currentUser.id,
-                receiver_id: otherUserId,
-                message_text: messageText
-            });
-
-            if (error) {
-                console.error('Error sending message:', error);
-                showToast('پیام ارسال نشد.', 'error');
-            }
-        };
-
-        sendBtn.onclick = handleSendMessage;
+        sendBtn.onclick = boundSendMessage;
         chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') handleSendMessage();
+            if (e.key === 'Enter') boundSendMessage();
         });
+        chatImageUpload.onchange = boundImageUpload;
+        
+        await loadMessages(otherUserId, messageContainer);
 
         if (chatSubscription) chatSubscription.unsubscribe();
 
@@ -2255,6 +2242,108 @@
         }
         document.getElementById('chat-page').style.padding = ''; 
         navigateTo(lastPageId);
+    };
+
+    const renderMessage = (msg) => {
+        const isMe = msg.sender_id === currentUser.id;
+        const time = new Date(msg.created_at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+        let messageContentHTML = '';
+        let bubbleClasses = 'px-4 py-2'; // Default padding for text
+
+        if (msg.image_url) {
+            bubbleClasses = 'p-1'; // Less padding for image bubbles
+            messageContentHTML = `<img src="${msg.image_url}" class="rounded-lg max-w-full h-auto" style="max-height: 250px;" alt="تصویر ارسال شده" onload="this.closest('#chat-messages').scrollTop = this.closest('#chat-messages').scrollHeight">`;
+        } else {
+            messageContentHTML = `<p class="whitespace-pre-wrap">${msg.message_text}</p>`;
+        }
+
+        return `
+            <div class="flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}">
+                <div class="max-w-xs lg:max-w-md ${bubbleClasses} rounded-2xl ${isMe ? 'bg-teal-500 text-white rounded-br-lg' : 'bg-gray-200 text-gray-800 rounded-bl-lg'}">
+                    ${messageContentHTML}
+                    <p class="text-xs mt-1 ${isMe ? 'text-white/70' : 'text-gray-500'} text-left">${time}</p>
+                </div>
+            </div>
+        `;
+    };
+
+    const loadMessages = async (otherUserId, messageContainer) => {
+        const { data: messages, error } = await db.from('chat_messages')
+            .select('*')
+            .in('sender_id', [currentUser.id, otherUserId])
+            .in('receiver_id', [currentUser.id, otherUserId])
+            .order('created_at', { ascending: true });
+        
+        if(messages) {
+            messageContainer.innerHTML = messages.map(renderMessage).join('');
+            messageContainer.scrollTop = messageContainer.scrollHeight;
+        }
+    };
+
+    const handleSendMessage = async (otherUserId, chatInput) => {
+        const messageText = chatInput.value.trim();
+        if (!messageText) return;
+        chatInput.value = '';
+
+        const { error } = await db.from('chat_messages').insert({
+            sender_id: currentUser.id,
+            receiver_id: otherUserId,
+            message_text: messageText
+        });
+
+        if (error) {
+            console.error('Error sending message:', error);
+            showToast('پیام ارسال نشد.', 'error');
+            chatInput.value = messageText; // Restore message on failure
+        }
+    };
+
+    const handleChatImageUpload = async (event, otherUserId) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        event.target.value = '';
+
+        const messageContainer = document.getElementById('chat-messages');
+        const uploadPlaceholderId = `upload-${Date.now()}`;
+        const placeholderHTML = `
+            <div id="${uploadPlaceholderId}" class="flex items-end gap-2 justify-end">
+                <div class="max-w-xs p-2 rounded-2xl bg-teal-200 text-teal-800 rounded-br-lg">
+                    <p class="text-sm">...در حال آپلود تصویر</p>
+                </div>
+            </div>
+        `;
+        messageContainer.innerHTML += placeholderHTML;
+        messageContainer.scrollTop = messageContainer.scrollHeight;
+
+        // BUCKET NAME FIX: Changed 'chat_images' to 'chat-images'
+        const bucketName = 'chat-images';
+        const fileName = `public/${currentUser.id}_${otherUserId}/${Date.now()}-${file.name}`;
+
+        const { error: uploadError } = await db.storage.from(bucketName).upload(fileName, file);
+
+        if (uploadError) {
+            showToast('خطا در آپلود تصویر.', 'error');
+            document.getElementById(uploadPlaceholderId)?.remove();
+            console.error(uploadError);
+            return;
+        }
+
+        const { data: urlData } = db.storage.from(bucketName).getPublicUrl(fileName);
+
+        const { error: insertError } = await db.from('chat_messages').insert({
+            sender_id: currentUser.id,
+            receiver_id: otherUserId,
+            image_url: urlData.publicUrl
+        });
+
+        document.getElementById(uploadPlaceholderId)?.remove();
+
+        if (insertError) {
+            showToast('خطا در ارسال تصویر.', 'error');
+            console.error(insertError);
+            await db.storage.from(bucketName).remove([fileName]);
+        }
     };
     
     const confirmEndChat = (clientId) => {
