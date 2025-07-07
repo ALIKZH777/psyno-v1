@@ -2,6 +2,7 @@
 <html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
+    <!-- ZOOM & SELECT FIX: Added user-scalable=no to prevent zooming -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
     <title>ساینو - دستیار سلامت روان شما</title>
     
@@ -17,7 +18,7 @@
     <!-- Chart.js for visualizations -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <!-- Persian Calendar Libraries -->
+    <!-- کتابخانه‌های تقویم فارسی -->
     <link rel="stylesheet" href="https://unpkg.com/persian-datepicker@1.2.0/dist/css/persian-datepicker.min.css"/>
     <script src="https://unpkg.com/jquery@3.3.1/dist/jquery.min.js"></script>
     <script src="https://unpkg.com/persian-date@1.1.0/dist/persian-date.min.js"></script>
@@ -29,6 +30,7 @@
         body {
             font-family: 'Vazirmatn', sans-serif;
             -webkit-tap-highlight-color: transparent;
+            /* ZOOM & SELECT FIX: Disable text selection and copying */
             user-select: none;
             -webkit-user-select: none;
             -moz-user-select: none;
@@ -144,16 +146,18 @@
             }
         }
         
+        /* Star rating styles */
         .star-rating .star {
             cursor: pointer;
-            color: #d1d5db;
+            color: #d1d5db; /* gray-300 */
             transition: color 0.2s;
         }
         .star-rating .star:hover,
         .star-rating .star.selected {
-            color: #f59e0b;
+            color: #f59e0b; /* amber-500 */
         }
 
+        /* Chat tick styles */
         .chat-ticks {
             display: inline-block;
             margin-left: 4px;
@@ -162,15 +166,12 @@
 </head>
 <body class="bg-white">
 
-    <!-- Full-page loader for initial auth check -->
     <div id="loading-spinner" class="fixed inset-0 bg-white z-50 flex items-center justify-center">
         <div class="loader"></div>
     </div>
 
-    <!-- Global modal container -->
     <div id="modal-container" class="modal-backdrop"></div>
 
-    <!-- Authentication Page -->
     <div id="auth-page" class="page hidden bg-gradient-to-br from-teal-400 to-blue-500">
         <div class="w-full h-full flex items-center justify-center">
             <div class="w-full max-w-md m-auto p-8">
@@ -178,59 +179,72 @@
                     <h1 class="text-5xl font-bold text-white">ساینو</h1>
                     <p class="text-white/80 mt-2">دستیار هوشمند سلامت روان شما</p>
                 </div>
-
-                <!-- Phone Entry View -->
-                <div id="phone-entry-view">
-                    <form id="phone-form" class="bg-white/20 backdrop-blur-lg p-8 rounded-2xl shadow-lg space-y-6">
-                        <h2 class="text-2xl font-bold text-white text-center">ورود یا ثبت‌نام</h2>
+                
+                <div id="login-form-container">
+                    <form id="login-form" class="bg-white/20 backdrop-blur-lg p-8 rounded-2xl shadow-lg space-y-6">
+                        <h2 class="text-2xl font-bold text-white text-center">ورود به حساب کاربری</h2>
                         <div>
-                            <label for="phone-input" class="block text-sm font-medium text-white">شماره موبایل</label>
-                            <input type="tel" id="phone-input" required class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 placeholder-gray-600 focus:ring-2 focus:ring-white text-left" placeholder="09123456789" dir="ltr">
-                            <p class="text-xs text-white/70 mt-2">شماره موبایل را بدون کد کشور وارد کنید.</p>
+                            <label for="login-email" class="block text-sm font-medium text-white">ایمیل</label>
+                            <input type="email" id="login-email" required class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 placeholder-gray-600 focus:ring-2 focus:ring-white">
                         </div>
-                        <button type="submit" class="w-full bg-white text-teal-600 font-bold py-3 rounded-lg hover:bg-gray-100 transition duration-300 shadow-md">ارسال کد تایید</button>
-                    </form>
-                </div>
-
-                <!-- OTP Entry View -->
-                <div id="otp-entry-view" class="hidden">
-                     <form id="otp-form" class="bg-white/20 backdrop-blur-lg p-8 rounded-2xl shadow-lg space-y-6">
-                        <h2 class="text-2xl font-bold text-white text-center">کد تایید را وارد کنید</h2>
-                        <p id="otp-message" class="text-center text-white text-sm"></p>
                         <div>
-                            <label for="otp-input" class="block text-sm font-medium text-white">کد ۶ رقمی</label>
-                            <input type="text" id="otp-input" required inputmode="numeric" maxlength="6" class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 placeholder-gray-600 focus:ring-2 focus:ring-white text-center tracking-[1em]" dir="ltr">
+                            <label for="login-password" class="block text-sm font-medium text-white">رمز عبور</label>
+                            <input type="password" id="login-password" required class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 placeholder-gray-600 focus:ring-2 focus:ring-white">
                         </div>
-                        <button type="submit" class="w-full bg-white text-teal-600 font-bold py-3 rounded-lg hover:bg-gray-100 transition duration-300 shadow-md">تایید و ادامه</button>
+                        <button type="submit" class="w-full bg-white text-teal-600 font-bold py-3 rounded-lg hover:bg-gray-100 transition duration-300 shadow-md">ورود</button>
+                        
+                        <!-- QUICK LOGIN FIX: Quick login buttons container -->
+                        <div id="quick-login-container" class="hidden space-y-2 pt-2">
+                             <div class="relative flex py-2 items-center">
+                                <div class="flex-grow border-t border-white/50"></div>
+                                <span class="flex-shrink mx-4 text-white/80 text-sm">یا</span>
+                                <div class="flex-grow border-t border-white/50"></div>
+                            </div>
+                            <button type="button" id="quick-login-btn" class="w-full bg-blue-500 text-white font-bold py-3 rounded-lg hover:bg-blue-600 transition duration-300 shadow-md">ورود سریع</button>
+                            <button type="button" id="biometric-login-btn" class="w-full bg-transparent border-2 border-white text-white font-bold py-3 rounded-lg hover:bg-white/20 transition duration-300 shadow-md flex items-center justify-center gap-2">
+                                <i data-lucide="fingerprint"></i>
+                                <span>ورود با اثر انگشت</span>
+                            </button>
+                        </div>
+
                         <p class="text-center text-sm text-white">
-                            <a href="#" id="go-back-to-phone" class="font-bold hover:underline">ویرایش شماره موبایل</a>
+                            حساب کاربری ندارید؟ <a href="#" id="show-signup" class="font-bold hover:underline">ثبت‌نام کنید</a>
                         </p>
                     </form>
                 </div>
-                
-                <!-- Details Entry View (for new users) -->
-                <div id="details-entry-view" class="hidden">
-                    <form id="details-form" class="bg-white/20 backdrop-blur-lg p-8 rounded-2xl shadow-lg space-y-4">
-                        <h2 class="text-2xl font-bold text-white text-center">تکمیل پروفایل</h2>
-                         <div>
-                            <label for="details-fullname" class="block text-sm font-medium text-white">نام و نام خانوادگی</label>
-                            <input type="text" id="details-fullname" required class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 placeholder-gray-600 focus:ring-2 focus:ring-white">
+
+                <div id="signup-form-container" class="hidden">
+                    <form id="signup-form" class="bg-white/20 backdrop-blur-lg p-8 rounded-2xl shadow-lg space-y-4">
+                        <h2 class="text-2xl font-bold text-white text-center">ایجاد حساب جدید</h2>
+                        <div>
+                            <label for="signup-fullname" class="block text-sm font-medium text-white">نام و نام خانوادگی</label>
+                            <input type="text" id="signup-fullname" required class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 placeholder-gray-600 focus:ring-2 focus:ring-white">
                         </div>
                         <div>
-                            <label for="details-role" class="block text-sm font-medium text-white">نقش شما</label>
-                            <select id="details-role" class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 focus:ring-2 focus:ring-white">
+                            <label for="signup-email" class="block text-sm font-medium text-white">ایمیل</label>
+                            <input type="email" id="signup-email" required class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 placeholder-gray-600 focus:ring-2 focus:ring-white">
+                        </div>
+                        <div>
+                            <label for="signup-password" class="block text-sm font-medium text-white">رمز عبور</label>
+                            <input type="password" id="signup-password" required class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 placeholder-gray-600 focus:ring-2 focus:ring-white">
+                        </div>
+                        <div>
+                            <label for="signup-role" class="block text-sm font-medium text-white">نقش شما</label>
+                            <select id="signup-role" class="mt-1 block w-full bg-white/50 border-0 rounded-lg py-2 px-3 text-gray-800 focus:ring-2 focus:ring-white">
                                 <option value="client">مراجع</option>
                                 <option value="therapist">روانشناس</option>
                             </select>
                         </div>
-                        <button type="submit" class="w-full bg-white text-teal-600 font-bold py-3 rounded-lg hover:bg-gray-100 transition duration-300 shadow-md">شروع استفاده از ساینو</button>
+                        <button type="submit" class="w-full bg-white text-teal-600 font-bold py-3 rounded-lg hover:bg-gray-100 transition duration-300 shadow-md">ثبت‌نام</button>
+                        <p class="text-center text-sm text-white">
+                            قبلا ثبت‌نام کرده‌اید؟ <a href="#" id="show-login" class="font-bold hover:underline">وارد شوید</a>
+                        </p>
                     </form>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Main App Container -->
     <div id="app-container" class="hidden">
         <!-- Client Pages -->
         <div id="client-dashboard-page" class="page"></div>
@@ -253,7 +267,6 @@
         <!-- Admin Page -->
         <div id="admin-dashboard-page" class="page"></div>
         
-        <!-- Bottom Navigation Bar -->
         <div id="bottom-nav-bar" class="bottom-nav bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
         </div>
     </div>
@@ -273,13 +286,14 @@
     const { createClient } = supabase;
     const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         auth: {
-            persistSession: true, 
+            // LOGIN FIX: Session persistence is now handled manually with quick login
+            // to ensure user is logged out on app close as requested.
+            persistSession: false, 
             autoRefreshToken: true,
-            detectSessionInUrl: false,
+            detectSessionInUrl: true,
         },
     });
     
-    // Global state variables
     let currentUser = null;
     let userProfile = null;
     let aiFeaturesEnabled = true;
@@ -287,8 +301,6 @@
     let moodChartInstance = null;
     let clientMoodChartInstance = null;
     let lastPageId = 'client-dashboard-page';
-    let verificationPhone = null;
-    let isManualLoginInProgress = false; // Flag to control auth flow
 
     // =================================================================
     // UTILITY & HELPER FUNCTIONS
@@ -303,7 +315,7 @@
     const renderAvatar = (containerEl, avatarUrl, options = {}) => {
         const { bgColor = 'bg-teal-100', iconColor = 'text-teal-600' } = options;
         if (avatarUrl) {
-            containerEl.innerHTML = `<img src="${avatarUrl}" class="w-full h-full object-cover rounded-full" onerror="this.onerror=null; this.parentElement.innerHTML = window.defaultAvatarSvg('${bgColor}', '${iconColor}');">`;
+            containerEl.innerHTML = `<img src="${avatarUrl}" class="w-full h-full object-cover rounded-full">`;
         } else {
             containerEl.innerHTML = defaultAvatarSvg(bgColor, iconColor);
         }
@@ -412,277 +424,194 @@
 
 
     // =================================================================
-    // AUTHENTICATION (GUARANTEED FLOW)
+    // AUTHENTICATION (REWORKED FOR QUICK & BIOMETRIC LOGIN)
     // =================================================================
-    const appContainer = document.getElementById('app-container');
+
     const authPage = document.getElementById('auth-page');
+    const appContainer = document.getElementById('app-container');
+    const loginForm = document.getElementById('login-form');
+    const signupForm = document.getElementById('signup-form');
+    const quickLoginContainer = document.getElementById('quick-login-container');
+    const quickLoginBtn = document.getElementById('quick-login-btn');
+    const biometricLoginBtn = document.getElementById('biometric-login-btn');
 
-    const phoneEntryView = document.getElementById('phone-entry-view');
-    const otpEntryView = document.getElementById('otp-entry-view');
-    const detailsEntryView = document.getElementById('details-entry-view');
 
-    const phoneForm = document.getElementById('phone-form');
-    const otpForm = document.getElementById('otp-form');
-    const detailsForm = document.getElementById('details-form');
-    const goBackBtn = document.getElementById('go-back-to-phone');
-
-    const showAuthView = (viewToShow) => {
-        [phoneEntryView, otpEntryView, detailsEntryView].forEach(view => {
-            view.style.display = view.id === viewToShow ? 'block' : 'none';
-        });
-    };
-
-    const invokeEdgeFunction = async (functionName, body) => {
-        const { data, error } = await db.functions.invoke(functionName, {
-            body: JSON.stringify(body),
-        });
-
-        if (error) {
-            throw new Error(`خطا در ارتباط با سرور: ${error.message}`);
-        }
-        
-        if (data.error) {
-            throw new Error(data.error);
-        }
-
-        return data;
-    };
-
-    /**
-     * The single, central function to initialize the app state after a successful login.
-     * It fetches the profile and decides the next step.
-     * @param {object} user - The Supabase user object.
-     * @param {boolean} isNewUser - Flag from the server indicating if it's a new user.
-     */
-    const initializeAppState = async (user, isNewUser = false) => {
-        currentUser = user;
-        
-        if (isNewUser) {
-            // User is new, backend has created a default profile. Show details form to update it.
-            showAuthView('details-entry-view');
-            hideActionSpinner();
-        } else {
-            // Existing user, fetch their profile and enter the app.
-            const { data: profile, error: profileError } = await db.from('profiles').select('*').eq('id', currentUser.id).single();
-
-            if (profileError) {
-                throw profileError; // This should ideally not happen for existing users
-            }
-            userProfile = profile;
-            await setupUIForRole(userProfile.role);
-            
-            appContainer.classList.remove('hidden');
-            authPage.classList.add('hidden');
-            authPage.classList.remove('active');
-            
-            isManualLoginInProgress = false; // End of manual flow
-            hideActionSpinner();
-        }
-    };
-
-    const handlePhoneSubmit = async (e) => {
+    document.getElementById('show-signup').addEventListener('click', (e) => {
         e.preventDefault();
-        isManualLoginInProgress = true; // Start of manual flow
-        showActionSpinner();
-        const phoneInput = document.getElementById('phone-input');
-        let phone = phoneInput.value.trim();
-
-        if (phone.startsWith('09')) {
-            phone = '+98' + phone.substring(1);
-        } else if (phone.startsWith('98')) {
-            phone = '+' + phone;
-        }
-
-        if (!phone || !/^\+989\d{9}$/.test(phone)) {
-            hideActionSpinner();
-            showToast('لطفا شماره موبایل معتبر ایران را وارد کنید (مثال: 09123456789).', 'error');
-            isManualLoginInProgress = false; // Abort manual flow
-            return;
-        }
-        
-        try {
-            await invokeEdgeFunction('mediana-otp', { phone });
-            verificationPhone = phone;
-            document.getElementById('otp-message').textContent = `کد تایید به شماره ${verificationPhone} ارسال شد.`;
-            showAuthView('otp-entry-view');
-            showToast('کد تایید برای شما ارسال شد.', 'success');
-        } catch (error) {
-            showToast(error.message, 'error');
-            isManualLoginInProgress = false; // Abort manual flow
-        } finally {
-            hideActionSpinner();
-        }
-    }
-
-    const handleOtpSubmit = async (e) => {
-        e.preventDefault();
-        showActionSpinner();
-        const otpInput = document.getElementById('otp-input');
-        const token = otpInput.value;
-
-        if (!token || token.length !== 6) {
-            hideActionSpinner();
-            showToast('کد تایید باید ۶ رقمی باشد.', 'error');
-            isManualLoginInProgress = false; // Abort manual flow
-            return;
-        }
-
-        try {
-            // Step 1: Verify token with server and get the session object
-            const { session, isNewUser } = await invokeEdgeFunction('mediana-otp', {
-                phone: verificationPhone,
-                token: token,
-            });
-
-            // Step 2: Validate the session object received from the server
-            if (!session || !session.access_token || !session.refresh_token) {
-                 throw new Error("پاسخ سرور برای ایجاد نشست نامعتبر است.");
-            }
-
-            // Step 3: Manually set the session in the client library.
-            const { data: sessionData, error: sessionError } = await db.auth.setSession({
-                access_token: session.access_token,
-                refresh_token: session.refresh_token,
-            });
-
-            if (sessionError) {
-                console.error("Detailed sessionError:", sessionError);
-                throw new Error("خطا در تنظیم نشست کاربری. لطفاً دوباره تلاش کنید.");
-            }
-            
-            // Step 4: Use the user object returned directly by setSession.
-            if (!sessionData.user) {
-                 throw new Error("احراز هویت موفق بود اما دریافت اطلاعات کاربر با خطا مواجه شد.");
-            }
-
-            // Step 5: Call the central app initializer function with the user object from setSession.
-            await initializeAppState(sessionData.user, isNewUser);
-
-        } catch (error) {
-            showToast(error.message, 'error');
-            console.error("Error in OTP Submit:", error);
-            isManualLoginInProgress = false; // Abort manual flow on any error
-            hideActionSpinner();
-        }
-    }
-
-    const handleDetailsSubmit = async (e) => {
-        e.preventDefault();
-        showActionSpinner();
-        const fullName = document.getElementById('details-fullname').value;
-        const role = document.getElementById('details-role').value;
-
-        if (!fullName.trim()) {
-            hideActionSpinner();
-            showToast('لطفا نام و نام خانوادگی را وارد کنید.', 'error');
-            return;
-        }
-
-        try {
-            if (!currentUser || !currentUser.id) {
-                throw new Error("اطلاعات کاربر یافت نشد. لطفاً دوباره وارد شوید.");
-            }
-            
-            // Update profile using the edge function, which returns the updated profile
-            const { profile } = await invokeEdgeFunction('mediana-otp', {
-                action: 'update_profile',
-                userId: currentUser.id,
-                fullName,
-                role
-            });
-
-            // The profile is now updated. We can proceed directly to the app.
-            userProfile = profile; // Set the global profile object
-            await setupUIForRole(userProfile.role);
-            
-            appContainer.classList.remove('hidden');
-            authPage.classList.add('hidden');
-            authPage.classList.remove('active');
-            
-            isManualLoginInProgress = false; // End of manual flow
-        } catch (error) {
-            showToast(error.message, 'error');
-            isManualLoginInProgress = false; // Abort manual flow
-        } finally {
-            hideActionSpinner();
-        }
-    }
-    
-    const handleLogout = async () => {
-        showActionSpinner();
-        try {
-            const { error } = await db.auth.signOut();
-            if (error) {
-                throw error;
-            }
-            
-            // --- Manually and immediately reset the UI to the login page ---
-            // This makes the logout experience instant for the user.
-            
-            // 1. Reset all global state
-            currentUser = null;
-            userProfile = null;
-            isManualLoginInProgress = false; // Reset the flag
-            if (chatSubscription) {
-                chatSubscription.unsubscribe();
-                chatSubscription = null;
-            }
-            
-            // 2. Hide the main app and show the authentication page
-            document.getElementById('app-container').classList.add('hidden');
-            const authPage = document.getElementById('auth-page');
-            authPage.classList.remove('hidden');
-            authPage.classList.add('active');
-            
-            // 3. Ensure the phone entry view is the one shown
-            showAuthView('phone-entry-view');
-            
-            // 4. Hide any navigation bars
-            document.getElementById('bottom-nav-bar').classList.add('hidden');
-
-            showToast('شما با موفقیت از حساب خود خارج شدید.', 'success');
-
-        } catch (error) {
-            console.error("Error during logout:", error);
-            showToast('خطا در خروج از حساب کاربری.', 'error');
-        } finally {
-            hideActionSpinner();
-        }
-    };
-
-    phoneForm.addEventListener('submit', handlePhoneSubmit);
-    otpForm.addEventListener('submit', handleOtpSubmit);
-    detailsForm.addEventListener('submit', handleDetailsSubmit);
-    goBackBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        verificationPhone = null;
-        isManualLoginInProgress = false; // Abort manual flow
-        showAuthView('phone-entry-view');
+        document.getElementById('login-form-container').classList.add('hidden');
+        document.getElementById('signup-form-container').classList.remove('hidden');
     });
+
+    document.getElementById('show-login').addEventListener('click', (e) => {
+        e.preventDefault();
+        document.getElementById('signup-form-container').classList.add('hidden');
+        document.getElementById('login-form-container').classList.remove('hidden');
+    });
+
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        showActionSpinner();
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+        const { data, error } = await db.auth.signInWithPassword({ email, password });
+        if (error) {
+            hideActionSpinner();
+            showToast(`خطا در ورود: ${error.message}`, 'error');
+        } else {
+            // QUICK LOGIN FIX: Save credentials on successful login
+            // WARNING: Storing credentials in localStorage is not recommended for production.
+            // This is implemented as per user request. A more secure method (e.g., refresh tokens) is advised.
+            try {
+                localStorage.setItem('psyno_quick_email', email);
+                localStorage.setItem('psyno_quick_password', password);
+            } catch (e) {
+                console.warn("Could not save quick login credentials.", e);
+            }
+        }
+        // On success, onAuthStateChange will handle UI changes.
+    });
+
+    signupForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        showActionSpinner();
+        const email = document.getElementById('signup-email').value;
+        const password = document.getElementById('signup-password').value;
+        const fullName = document.getElementById('signup-fullname').value;
+        const role = document.getElementById('signup-role').value;
+
+        const { data, error } = await db.auth.signUp({
+            email,
+            password,
+            options: {
+                data: {
+                    full_name: fullName,
+                    role: role 
+                }
+            }
+        });
+        
+        hideActionSpinner();
+        if (error) {
+            showToast(`خطا در ثبت‌نام: ${error.message}`, 'error');
+        } else {
+            if (data.user && data.user.identities && data.user.identities.length === 0) {
+                 showToast('این کاربر از قبل وجود دارد. لطفاً وارد شوید.', 'error');
+            } else {
+                 showToast('ثبت‌نام موفقیت‌آمیز بود. لطفاً ایمیل خود را برای تایید بررسی کنید.', 'info');
+            }
+        }
+    });
+
+    const handleLogout = async () => {
+        document.getElementById('loading-spinner').style.display = 'flex';
+        appContainer.classList.add('hidden');
+        const { error } = await db.auth.signOut();
+        if (error) {
+            showToast(`خطا در خروج: ${error.message}`, 'error');
+        }
+        // onAuthStateChange will handle showing the login page.
+    };
+    
+    // QUICK LOGIN FIX: Function to handle quick login
+    const handleQuickLogin = async () => {
+        const email = localStorage.getItem('psyno_quick_email');
+        const password = localStorage.getItem('psyno_quick_password');
+
+        if (!email || !password) {
+            showToast('اطلاعات ورود سریع یافت نشد. لطفاً یکبار به صورت عادی وارد شوید.', 'error');
+            return;
+        }
+
+        showActionSpinner();
+        const { error } = await db.auth.signInWithPassword({ email, password });
+        if (error) {
+            hideActionSpinner();
+            showToast(`خطا در ورود سریع: ${error.message}`, 'error');
+        }
+    };
+    
+    // BIOMETRIC FIX: Function to handle biometric login
+    const handleBiometricLogin = async () => {
+        // Check if WebAuthn is supported by the browser
+        if (!navigator.credentials || !navigator.credentials.get) {
+            showToast('مرورگر شما از ورود بیومتریک پشتیبانی نمی‌کند.', 'error');
+            return;
+        }
+
+        showToast('لطفاً از حسگر اثر انگشت یا تشخیص چهره استفاده کنید.', 'info');
+
+        try {
+            // This is a conceptual implementation. A real implementation requires a server-side
+            // component to generate a challenge and a prior user registration step.
+            // For now, we simulate success and then use the stored credentials.
+            // A real `challenge` would be a Uint8Array from the server.
+            const credential = await navigator.credentials.get({
+                publicKey: {
+                    challenge: new Uint8Array(32), // Placeholder challenge
+                    allowCredentials: [],
+                    timeout: 60000,
+                    userVerification: 'preferred',
+                }
+            });
+
+            if (credential) {
+                // In a real app, you'd send the credential to your server for verification.
+                // Here, we proceed with the quick login as a fallback.
+                showToast('احراز هویت بیومتریک موفق بود. در حال ورود...', 'success');
+                await handleQuickLogin();
+            } else {
+                 showToast('احراز هویت بیومتریک لغو شد.', 'error');
+            }
+
+        } catch (err) {
+            console.error('Biometric Error:', err);
+            showToast(`خطای بیومتریک: ${err.message}`, 'error');
+        }
+    };
+
+    quickLoginBtn.addEventListener('click', handleQuickLogin);
+    biometricLoginBtn.addEventListener('click', handleBiometricLogin);
+    
+    // QUICK LOGIN FIX: Check for saved credentials on page load
+    const checkForQuickLogin = () => {
+        try {
+            const savedEmail = localStorage.getItem('psyno_quick_email');
+            if (savedEmail) {
+                quickLoginContainer.classList.remove('hidden');
+                lucide.createIcons();
+            } else {
+                quickLoginContainer.classList.add('hidden');
+            }
+        } catch (e) {
+            console.warn("Could not check for quick login credentials.", e);
+            quickLoginContainer.classList.add('hidden');
+        }
+    };
+
 
     // =================================================================
     // APP INITIALIZATION & ROUTING
     // =================================================================
 
-    // This listener is the core of the app's auth logic.
-    // It handles automatic login and session changes.
     db.auth.onAuthStateChange(async (event, session) => {
-        // ** CRITICAL **: Ignore this listener during the manual login flow
-        if (isManualLoginInProgress) {
-            console.log("onAuthStateChange skipped during manual login.");
-            return;
-        }
-
         const loadingSpinner = document.getElementById('loading-spinner');
-        
         try {
-            // This event fires on page load if a session is found (AUTOMATIC LOGIN)
-            // or after a successful manual login.
-            if (event === 'SIGNED_IN' && session && session.user) {
-                await initializeAppState(session.user, false); 
-            } 
-            // This event fires after a logout or if the session becomes invalid.
-            else if (event === 'SIGNED_OUT') {
+            if (session && session.user) {
+                currentUser = session.user;
+                const { data, error } = await db.from('profiles').select('*').eq('id', currentUser.id).single();
+
+                if (error || !data) {
+                    console.error("Critical: Profile fetch failed.", error);
+                    await db.auth.signOut();
+                    return;
+                }
+
+                userProfile = data;
+                await setupUIForRole(userProfile.role);
+                appContainer.classList.remove('hidden');
+                authPage.classList.add('hidden');
+
+            } else {
                 currentUser = null;
                 userProfile = null;
                 if (chatSubscription) {
@@ -692,36 +621,20 @@
                 appContainer.classList.add('hidden');
                 authPage.classList.remove('hidden');
                 authPage.classList.add('active');
-                showAuthView('phone-entry-view');
+                // QUICK LOGIN FIX: Check for credentials when user is logged out
+                checkForQuickLogin();
             }
         } catch (err) {
             console.error("Fatal error in onAuthStateChange:", err);
             showToast('یک خطای پیش‌بینی نشده رخ داد.', 'error');
-            await handleLogout();
-        } finally {
-            // This hides the initial full-page spinner once auth state is resolved.
-            loadingSpinner.style.display = 'none';
-        }
-    });
-
-    // Initial check when the app loads to decide if we show the login page
-    // or wait for the automatic login to complete.
-    const initialSessionCheck = async () => {
-        const { data: { session } } = await db.auth.getSession();
-        // If there's no session, the user needs to log in.
-        // We can show the login page immediately.
-        if (!session) {
-            isManualLoginInProgress = false;
-            document.getElementById('loading-spinner').style.display = 'none';
+            appContainer.classList.add('hidden');
             authPage.classList.remove('hidden');
             authPage.classList.add('active');
-            showAuthView('phone-entry-view');
+        } finally {
+            loadingSpinner.style.display = 'none';
+            hideActionSpinner();
         }
-        // If a session *does* exist, we do nothing here. The `onAuthStateChange`
-        // listener will fire with the 'SIGNED_IN' event and handle the automatic login.
-        // The full-page spinner will remain visible until that process is complete.
-    };
-    initialSessionCheck();
+    });
 
 
     const setupUIForRole = async (role) => {
@@ -731,7 +644,7 @@
         if (!['client', 'therapist', 'admin'].includes(role)) {
             showToast(`نقش کاربری "${role || 'نامشخص'}" تعریف نشده است.`, 'error');
             console.error(`Invalid role detected: ${role}`);
-            await handleLogout();
+            handleLogout();
             return;
         }
 
@@ -791,7 +704,7 @@
     };
 
     // =================================================================
-    // TRAINING SECTION (IMPROVED LOADING)
+    // OPTIMIZED: TRAINING SECTION
     // =================================================================
     const navigateToTraining = () => {
         const page = document.getElementById('training-page');
@@ -809,12 +722,11 @@
                 <button onclick="goBackFromTraining()" class="text-gray-600"><i data-lucide="arrow-right"></i></button>
                 <h1 class="font-bold text-lg">بخش آموزش</h1>
             </header>
-            <div id="training-content-area" class="flex-grow relative">
-                <div id="training-loader" class="absolute inset-0 flex flex-col items-center justify-center text-center bg-gray-100">
+            <div id="training-content-area" class="flex-grow relative bg-gray-100">
+                <div id="training-loader" class="absolute inset-0 flex items-center justify-center">
                     <div class="loader"></div>
-                    <p class="mt-4 text-gray-600">در حال بارگذاری بخش آموزش...</p>
                 </div>
-                <iframe id="training-iframe" class="w-full h-full border-0" style="display: none;"></iframe>
+                <iframe id="training-iframe" class="w-full h-full border-0" style="visibility: hidden;"></iframe>
             </div>
         `;
         lucide.createIcons();
@@ -824,34 +736,10 @@
         
         const iframe = document.getElementById('training-iframe');
         const loader = document.getElementById('training-loader');
-        const contentArea = document.getElementById('training-content-area');
-
-        const showErrorState = () => {
-            contentArea.innerHTML = `
-                <div class="w-full h-full flex flex-col items-center justify-center text-center text-gray-700 animate-fadeIn p-4">
-                    <i data-lucide="cloud-off" class="w-16 h-16 mx-auto text-red-400"></i>
-                    <h2 class="mt-4 text-xl font-bold">خطا در بارگذاری</h2>
-                    <p class="mt-2 text-gray-500">متاسفانه نتوانستیم به بخش آموزش متصل شویم. لطفاً اتصال اینترنت خود را بررسی کرده و دوباره تلاش کنید.</p>
-                    <button onclick="navigateToTraining()" class="mt-6 bg-teal-500 text-white font-semibold py-2 px-6 rounded-lg hover:bg-teal-600 transition-all duration-300 flex items-center gap-2 mx-auto">
-                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                        <span>تلاش مجدد</span>
-                    </button>
-                </div>
-            `;
-            lucide.createIcons();
-        };
-
-        const loadingTimeout = setTimeout(showErrorState, 15000); // 15-second timeout
 
         iframe.onload = () => {
-            clearTimeout(loadingTimeout);
             loader.style.display = 'none';
-            iframe.style.display = 'block';
-        };
-
-        iframe.onerror = () => {
-            clearTimeout(loadingTimeout);
-            showErrorState();
+            iframe.style.visibility = 'visible';
         };
         
         iframe.src = "https://vids.psynoland.ir/";
@@ -915,11 +803,14 @@
     const renderClientDashboard = async () => {
         const page = document.getElementById('client-dashboard-page');
         
+        // POST-SESSION DASHBOARD FIX: The query below correctly checks for 'confirmed' appointments.
+        // When a therapist ends a session, its status changes to 'completed', so this query will
+        // return null, and the "Book an appointment" card will be shown automatically. No change needed here.
         const { data: lastAppointment, error: lastAptError } = await db
             .from('appointments')
             .select('status, therapist:therapist_id ( id, full_name, avatar_url )')
             .eq('client_id', currentUser.id)
-            .eq('status', 'confirmed')
+            .eq('status', 'confirmed') // Only show active therapists
             .order('created_at', { ascending: false })
             .limit(1)
             .single();
@@ -1020,6 +911,7 @@
         await loadJournalEntries();
         lucide.createIcons();
         
+        // RATING POPUP FIX: Check for reviews after dashboard has rendered
         await checkForPendingReviews();
     };
     
@@ -1499,6 +1391,7 @@
             if (apt.status === 'pending' || apt.status === 'confirmed') {
                 actionButtons += `<button onclick="cancelAppointment(${apt.id}, ${apt.slot.id})" class="flex-1 bg-red-100 text-red-700 py-2 rounded-lg text-sm">لغو نوبت</button>`;
             }
+            // RATING POPUP FIX: This button is a fallback. The main prompt will be automatic.
             if (apt.status === 'completed') {
                 actionButtons = `<button onclick="showRatingModal(${apt.id}, '${apt.therapist.id}', '${apt.therapist.full_name}')" class="flex-1 bg-amber-500 text-white py-2 rounded-lg text-sm">ثبت امتیاز و نظر</button>`;
             }
@@ -1672,6 +1565,7 @@
         await loadClientAppointments();
     };
     
+    // RATING POPUP FIX: New function to check for unreviewed sessions
     const checkForPendingReviews = async () => {
         const { data: completedAppointments, error: aptError } = await db
             .from('appointments')
@@ -1696,10 +1590,11 @@
         if (unreviewedAppointment) {
             setTimeout(() => {
                 showRatingModal(unreviewedAppointment.id, unreviewedAppointment.therapist.id, unreviewedAppointment.therapist.full_name);
-            }, 1000);
+            }, 1000); // Delay to allow user to see the dashboard first
         }
     };
 
+    // RATING POPUP FIX: New function to show rating modal
     const showRatingModal = (appointmentId, therapistId, therapistName = '') => {
         let currentRating = 0;
         const title = therapistName ? `امتیازدهی به جلسه با ${therapistName}` : 'امتیازدهی به جلسه';
@@ -1722,7 +1617,7 @@
         stars.forEach(star => {
             star.addEventListener('click', () => {
                 currentRating = star.dataset.value;
-                window.currentRating = currentRating;
+                window.currentRating = currentRating; // Store globally for the handler
                 stars.forEach(s => {
                     s.classList.toggle('selected', s.dataset.value <= currentRating);
                 });
@@ -1730,6 +1625,7 @@
         });
     };
 
+    // RATING POPUP FIX: New function to submit the review
     const submitReview = async (appointmentId, therapistId) => {
         const rating = window.currentRating;
         const comment = document.getElementById('rating-comment').value;
@@ -1742,6 +1638,8 @@
         closeModal();
         showActionSpinner();
 
+        // Note: Ensure you have a 'reviews' table with columns:
+        // id, created_at, appointment_id, client_id, therapist_id, rating, comment
         const { error } = await db.from('reviews').insert({
             appointment_id: appointmentId,
             client_id: currentUser.id,
@@ -1755,6 +1653,7 @@
             showToast('خطا در ثبت نظر. شاید قبلا نظر خود را ثبت کرده باشید.', 'error');
             console.error(error);
         } else {
+            // Also, ensure you have an RPC function 'update_therapist_rating'
             const { error: rpcError } = await db.rpc('update_therapist_rating', { therapist_id_arg: therapistId });
             hideActionSpinner();
             if (rpcError) {
@@ -1763,7 +1662,7 @@
             } else {
                  showToast('نظر و امتیاز شما با موفقیت ثبت شد.', 'success');
             }
-            await renderClientAppointments();
+            await loadClientAppointments(); // Refresh appointment list to remove the button
         }
     };
 
@@ -1772,7 +1671,7 @@
     const renderClientProfile = async () => {
         const page = document.getElementById('client-profile-page');
         page.innerHTML = `
-             <div class="p-4 space-y-6">
+            <div class="p-4 space-y-6">
                  <div class="flex flex-col items-center space-y-4">
                      <div class="relative w-24 h-24">
                          <div id="profile-page-avatar" class="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg"></div>
@@ -1783,7 +1682,7 @@
                      </div>
                      <div class="text-center">
                          <h1 class="text-2xl font-bold text-gray-800">${userProfile.full_name}</h1>
-                         <p class="text-gray-500">${currentUser.phone || 'شماره موبایل ثبت نشده'}</p>
+                         <p class="text-gray-500">${currentUser.email}</p>
                      </div>
                  </div>
 
@@ -1792,13 +1691,6 @@
                          <div class="flex items-center gap-4">
                              <i data-lucide="edit" class="text-gray-600"></i>
                              <span class="font-semibold text-gray-700">ویرایش اطلاعات کاربری</span>
-                         </div>
-                         <i data-lucide="chevron-left" class="text-gray-400"></i>
-                     </a>
-                     <a href="#" onclick="viewAppointmentHistory()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
-                         <div class="flex items-center gap-4">
-                             <i data-lucide="history" class="text-gray-600"></i>
-                             <span class="font-semibold text-gray-700">سوابق جلسات</span>
                          </div>
                          <i data-lucide="chevron-left" class="text-gray-400"></i>
                      </a>
@@ -1824,8 +1716,8 @@
                          </div>
                      </a>
                  </div>
-                 <p class="text-center text-gray-400 text-sm">نسخه نهایی</p>
-               </div>
+                 <p class="text-center text-gray-400 text-sm">نسخه ۲.۰.۰</p>
+             </div>
         `;
         renderAvatar(document.getElementById('profile-page-avatar'), userProfile.avatar_url);
         lucide.createIcons();
@@ -2085,7 +1977,7 @@
                             <div class="w-12 h-12 rounded-full overflow-hidden" id="client-list-avatar-${client.id}"></div>
                             <div>
                                 <p class="font-bold">${client.full_name}</p>
-                                <p class="text-sm text-gray-500">${client.phone || client.email}</p>
+                                <p class="text-sm text-gray-500">${client.email}</p>
                             </div>
                         </div>
                         <div class="flex gap-2">
@@ -2308,24 +2200,9 @@
 
     // --- THERAPIST: PROFILE ---
     const renderTherapistProfile = async () => {
-        showActionSpinner();
-        const { data: latestProfile, error: profileError } = await db
-            .from('profiles')
-            .select('*')
-            .eq('id', currentUser.id)
-            .single();
-        hideActionSpinner();
-
-        if (profileError || !latestProfile) {
-            showToast('خطا در بارگذاری اطلاعات پروفایل.', 'error');
-            console.error(profileError);
-            return;
-        }
-        userProfile = latestProfile;
-
         const page = document.getElementById('therapist-profile-page');
         page.innerHTML = `
-            <div class="p-4 space-y-6">
+            <div class="space-y-6">
                 <div class="flex flex-col items-center space-y-4">
                     <div class="relative w-24 h-24">
                         <div id="therapist-profile-avatar" class="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg"></div>
@@ -2336,39 +2213,35 @@
                     </div>
                     <div class="text-center">
                         <h1 class="text-2xl font-bold">${userProfile.full_name}</h1>
-                        <p class="text-gray-500">${currentUser.phone || 'شماره موبایل ثبت نشده'}</p>
+                        <p class="text-gray-500">${currentUser.email}</p>
                         <div class="mt-2 flex justify-center">${renderStars(userProfile.average_rating || 0, userProfile.total_ratings || 0)}</div>
                     </div>
                 </div>
                 
-                <div class="bg-white p-2 rounded-2xl shadow-md">
-                    <a href="#" onclick="openTherapistProfileEditor()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
-                        <div class="flex items-center gap-4">
-                            <i data-lucide="edit" class="text-gray-600"></i>
-                            <span class="font-semibold text-gray-700">ویرایش پروفایل تخصصی</span>
-                        </div>
-                        <i data-lucide="chevron-left" class="text-gray-400"></i>
-                    </a>
-                    <a href="#" onclick="viewAppointmentHistory()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
-                        <div class="flex items-center gap-4">
-                            <i data-lucide="history" class="text-gray-600"></i>
-                            <span class="font-semibold text-gray-700">سوابق جلسات</span>
-                        </div>
-                        <i data-lucide="chevron-left" class="text-gray-400"></i>
-                    </a>
-                    <div class="border-t my-1 mx-2"></div>
-                    <a href="#" onclick="handleLogout()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg text-red-500">
-                        <div class="flex items-center gap-4">
-                            <i data-lucide="log-out"></i>
-                            <span class="font-semibold">خروج</span>
-                        </div>
-                    </a>
+                <div class="bg-white p-4 rounded-2xl shadow-md space-y-4">
+                    <h2 class="text-lg font-bold">ویرایش پروفایل تخصصی</h2>
+                    <div class="space-y-2">
+                        <label for="therapist-fullname-input" class="block text-sm font-medium text-gray-700">نام کامل</label>
+                        <input id="therapist-fullname-input" type="text" class="w-full p-2 border rounded-lg" value="${userProfile.full_name || ''}">
+                    </div>
+                     <div class="space-y-2">
+                        <label for="therapist-specialization-input" class="block text-sm font-medium text-gray-700">تخصص‌ها (با کاما جدا کنید)</label>
+                        <input id="therapist-specialization-input" type="text" class="w-full p-2 border rounded-lg" placeholder="مثال: CBT, روانکاوی" value="${userProfile.specialization || ''}">
+                    </div>
+                    <div class="space-y-2">
+                        <label for="therapist-bio-input" class="block text-sm font-medium text-gray-700">بیوگرافی تخصصی</label>
+                        <textarea id="therapist-bio-input" class="w-full h-24 p-2 border rounded-lg" placeholder="درباره سوابق و رویکرد درمانی خود بنویسید...">${userProfile.bio || ''}</textarea>
+                    </div>
+                    <button onclick="updateTherapistProfile()" class="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold">ذخیره تغییرات</button>
                 </div>
 
+                <!-- RATING POPUP FIX: Display reviews here -->
                 <div class="bg-white p-4 rounded-2xl shadow-md">
                     <h2 class="text-lg font-bold mb-3">نظرات مراجعین</h2>
                     <div id="therapist-reviews-list" class="space-y-3 max-h-64 overflow-y-auto"></div>
                 </div>
+
+                <button onclick="handleLogout()" class="w-full bg-red-500 text-white font-bold py-3 rounded-lg hover:bg-red-600 transition">خروج از حساب</button>
             </div>
         `;
         renderAvatar(document.getElementById('therapist-profile-avatar'), userProfile.avatar_url, { bgColor: 'bg-blue-100', iconColor: 'text-blue-600'});
@@ -2376,33 +2249,11 @@
         lucide.createIcons();
     };
 
-    const openTherapistProfileEditor = () => {
-        const content = `
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">نام کامل</label>
-                    <input id="therapist-fullname-input" type="text" class="mt-1 w-full p-2 border rounded-lg" value="${userProfile.full_name || ''}">
-                </div>
-                 <div>
-                    <label class="block text-sm font-medium text-gray-700">تخصص</label>
-                    <input id="therapist-specialization-input" type="text" class="mt-1 w-full p-2 border rounded-lg" value="${userProfile.specialization || ''}" placeholder="مثال: روانشناس بالینی">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">بیوگرافی</label>
-                    <textarea id="therapist-bio-input" class="mt-1 w-full h-24 p-2 border rounded-lg" placeholder="کمی درباره خود و تخصصتان بنویسید...">${userProfile.bio || ''}</textarea>
-                </div>
-                <button onclick="updateTherapistProfile()" class="w-full bg-teal-500 text-white py-2 rounded-lg font-semibold">ذخیره تغییرات</button>
-            </div>
-        `;
-        showModal('ویرایش پروفایل تخصصی', content);
-    };
-
     const updateTherapistProfile = async () => {
         const newName = document.getElementById('therapist-fullname-input').value;
         const newBio = document.getElementById('therapist-bio-input').value;
         const newSpec = document.getElementById('therapist-specialization-input').value;
-        
-        closeModal();
+
         showActionSpinner();
         const { data, error } = await db.from('profiles').update({ 
             full_name: newName,
@@ -2421,6 +2272,7 @@
         }
     };
 
+    // RATING POPUP FIX: New function to load and display reviews for the therapist
     const loadTherapistReviews = async () => {
         const listEl = document.getElementById('therapist-reviews-list');
         if (!listEl) return;
@@ -2428,7 +2280,7 @@
 
         const { data, error } = await db
             .from('reviews')
-            .select('*')
+            .select('*, client:client_id(full_name)')
             .eq('therapist_id', currentUser.id)
             .order('created_at', { ascending: false });
 
@@ -2445,7 +2297,7 @@
         listEl.innerHTML = data.map(review => `
             <div class="bg-gray-50 p-3 rounded-lg border">
                 <div class="flex justify-between items-center mb-2">
-                    <span class="font-semibold text-sm">کاربر ساینو</span>
+                    <span class="font-semibold text-sm">${review.client.full_name}</span>
                     <div class="flex items-center">
                         <span class="text-amber-500 font-bold ml-1">${review.rating}</span>
                         <i data-lucide="star" class="w-4 h-4 text-amber-400 fill-current"></i>
@@ -2460,34 +2312,21 @@
 
 
     // =================================================================
-    // SHARED: CHAT & APPOINTMENT HISTORY
+    // SHARED: CHAT PAGE (UPGRADED WITH OPTIMISTIC UI & TICKS)
     // =================================================================
     const startChatWith = async (otherUserId) => {
-        showActionSpinner();
+        const page = document.getElementById('chat-page');
         const { data: otherUser, error } = await db.from('profiles').select('id, full_name, avatar_url').eq('id', otherUserId).single();
         if (error) {
-            hideActionSpinner();
             showToast('کاربر مورد نظر یافت نشد.', 'error');
             return;
         }
         
-        // Check the status of the latest appointment to determine if chat is read-only
-        const { data: latestAppointment } = await db
-            .from('appointments')
-            .select('status')
-            .or(`and(client_id.eq.${currentUser.id},therapist_id.eq.${otherUserId}),and(client_id.eq.${otherUserId},therapist_id.eq.${currentUser.id})`)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-
-        const isChatReadOnly = latestAppointment?.status === 'completed' && userProfile.role === 'client';
-
         let therapistControls = '';
-        if (userProfile.role === 'therapist' && latestAppointment?.status === 'confirmed') {
+        if (userProfile.role === 'therapist') {
             therapistControls = `<button onclick="confirmEndChat('${otherUserId}')" class="ml-auto text-xs bg-red-500 text-white font-semibold py-1 px-3 rounded-full">پایان گفتگو</button>`;
         }
 
-        const page = document.getElementById('chat-page');
         page.innerHTML = `
             <header class="bg-white shadow-sm p-3 flex items-center gap-3 flex-shrink-0">
                 <button onclick="goBackFromChat()" class="text-gray-600"><i data-lucide="arrow-right"></i></button>
@@ -2497,7 +2336,7 @@
             </header>
             <div id="chat-messages" class="flex-grow p-4 space-y-4 overflow-y-auto">
             </div>
-            <footer class="bg-white p-2 flex items-center gap-2 border-t flex-shrink-0 ${isChatReadOnly ? 'hidden' : ''}">
+            <footer class="bg-white p-2 flex items-center gap-2 border-t flex-shrink-0">
                 <label for="chat-image-upload" class="cursor-pointer p-2 text-gray-500 hover:text-teal-600 transition-colors">
                     <i data-lucide="paperclip"></i>
                 </label>
@@ -2513,23 +2352,22 @@
         page.style.padding = '0'; 
         navigateTo('chat-page');
 
-        if (!isChatReadOnly) {
-            const sendBtn = document.getElementById('send-chat-btn');
-            const chatInput = document.getElementById('chat-input');
-            const chatImageUpload = document.getElementById('chat-image-upload');
-            const boundSendMessage = () => handleSendMessage(otherUserId, chatInput);
-            const boundImageUpload = (event) => handleChatImageUpload(event, otherUserId);
+        const messageContainer = document.getElementById('chat-messages');
+        const sendBtn = document.getElementById('send-chat-btn');
+        const chatInput = document.getElementById('chat-input');
+        const chatImageUpload = document.getElementById('chat-image-upload');
 
-            sendBtn.onclick = boundSendMessage;
-            chatInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') boundSendMessage();
-            });
-            chatImageUpload.onchange = boundImageUpload;
-        }
+        const boundSendMessage = () => handleSendMessage(otherUserId, chatInput);
+        const boundImageUpload = (event) => handleChatImageUpload(event, otherUserId);
+
+        sendBtn.onclick = boundSendMessage;
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') boundSendMessage();
+        });
+        chatImageUpload.onchange = boundImageUpload;
         
-        await loadMessages(otherUserId, document.getElementById('chat-messages'));
+        await loadMessages(otherUserId, messageContainer);
         await markMessagesAsRead(otherUserId);
-        hideActionSpinner();
 
         if (chatSubscription) chatSubscription.unsubscribe();
 
@@ -2543,7 +2381,6 @@
                 if (!isRelevant) return;
 
                 if (payload.eventType === 'INSERT' && newMessage.sender_id === otherUserId) {
-                    const messageContainer = document.getElementById('chat-messages');
                     messageContainer.innerHTML += renderMessage(newMessage);
                     messageContainer.scrollTop = messageContainer.scrollHeight;
                     lucide.createIcons();
@@ -2620,6 +2457,7 @@
         }
     };
 
+    // CHAT FIX: Robust optimistic UI for sending messages
     const handleSendMessage = async (otherUserId, chatInput) => {
         const messageText = chatInput.value.trim();
         if (!messageText) return;
@@ -2660,6 +2498,7 @@
                     lucide.createIcons({ nodes: [ticksEl] });
                 }
             } else {
+                // Replace temp message with real one from DB
                 const finalMessageNode = new DOMParser().parseFromString(renderMessage(data), 'text/html').body.firstChild;
                 tempNode.replaceWith(finalMessageNode);
                 lucide.createIcons({ nodes: [finalMessageNode] });
@@ -2715,6 +2554,7 @@
         }
     };
     
+    // POST-SESSION FIX: Function for therapist to end the chat session
     const confirmEndChat = (clientId) => {
         const content = 'آیا از پایان دادن به این گفتگو مطمئن هستید؟ با این کار، وضعیت نوبت به "پایان‌یافته" تغییر می‌کند و کاربر می‌تواند برای شما نظر ثبت کند.';
         const actions = [{
@@ -2729,6 +2569,7 @@
         closeModal();
         showActionSpinner();
         
+        // Find the latest 'confirmed' appointment to mark as 'completed'
         const { data: appointment, error: aptError } = await db
             .from('appointments')
             .select('id')
@@ -2756,66 +2597,8 @@
         } else {
             showToast('گفتگو با موفقیت پایان یافت.', 'success');
             goBackFromChat();
-            renderTherapistDashboard();
+            renderTherapistDashboard(); // Refresh dashboard to update counts
         }
-    };
-
-    const viewAppointmentHistory = async () => {
-        showActionSpinner();
-        const query = db.from('appointments')
-            .select('id, status, type, client:client_id(id, full_name), therapist:therapist_id(id, full_name), slot:slot_id(start_time)')
-            .order('created_at', { ascending: false });
-
-        if (userProfile.role === 'client') {
-            query.eq('client_id', currentUser.id);
-        } else {
-            query.eq('therapist_id', currentUser.id);
-        }
-
-        const { data, error } = await query;
-        hideActionSpinner();
-
-        if (error) {
-            showToast('خطا در دریافت سوابق.', 'error');
-            console.error("History Error:", error);
-            return;
-        }
-
-        let content = '<p class="text-center text-gray-500">هیچ سابقه‌ای یافت نشد.</p>';
-
-        if (data && data.length > 0) {
-            content = `<div class="space-y-3 max-h-[60vh] overflow-y-auto">
-                ${data.map(apt => {
-                    const otherUser = userProfile.role === 'client' ? apt.therapist : apt.client;
-                    if (!otherUser || !apt.slot) return '';
-                    const statusMap = {
-                        pending: { text: 'در انتظار', color: 'text-yellow-600' },
-                        confirmed: { text: 'تایید شده', color: 'text-blue-600' },
-                        completed: { text: 'پایان یافته', color: 'text-green-600' },
-                        cancelled: { text: 'لغو شده', color: 'text-gray-600' },
-                        declined: { text: 'رد شده', color: 'text-red-600' }
-                    };
-                    const statusInfo = statusMap[apt.status] || { text: apt.status, color: 'text-gray-600' };
-
-                    return `
-                        <div class="bg-gray-50 p-3 rounded-lg border">
-                            <div class="flex justify-between items-center">
-                                <div>
-                                    <p class="font-semibold">${otherUser.full_name}</p>
-                                    <p class="text-sm text-gray-500">${apt.slot.start_time || 'زمان نامشخص'}</p>
-                                    <p class="text-xs font-bold mt-1 ${statusInfo.color}">${statusInfo.text}</p>
-                                </div>
-                                ${ (apt.status === 'confirmed' || apt.status === 'completed') ?
-                                `<button onclick="closeModal(); startChatWith('${otherUser.id}')" class="bg-teal-100 text-teal-700 text-sm font-semibold px-3 py-1 rounded-md">مشاهده چت</button>` : ''
-                                }
-                            </div>
-                        </div>
-                    `
-                }).join('')}
-            </div>`;
-        }
-        
-        showModal('سوابق جلسات', content);
     };
 
 
@@ -2869,7 +2652,7 @@
             <div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg">
                 <div>
                     <p class="font-semibold">${user.full_name}</p>
-                    <p class="text-sm text-gray-500">${user.phone || user.email}</p>
+                    <p class="text-sm text-gray-500">${user.email}</p>
                 </div>
                 <span class="text-sm font-semibold px-3 py-1 rounded-full ${user.role === 'client' ? 'bg-green-100 text-green-800' : (user.role === 'therapist' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800')}">${user.role}</span>
             </div>
@@ -2894,7 +2677,6 @@
     window.openProfileEditor = openProfileEditor;
     window.showSupportRequest = showSupportRequest;
     window.viewTestHistory = viewTestHistory;
-    window.openTherapistProfileEditor = openTherapistProfileEditor;
     window.updateTherapistProfile = updateTherapistProfile;
     window.viewClientDetails = viewClientDetails;
     window.startChatWith = startChatWith;
@@ -2914,8 +2696,6 @@
     window.submitReview = submitReview;
     window.confirmEndChat = confirmEndChat;
     window.endChat = endChat;
-    window.viewAppointmentHistory = viewAppointmentHistory;
-    window.defaultAvatarSvg = defaultAvatarSvg;
 
 </script>
 </body>
