@@ -643,6 +643,7 @@
     // =================================================================
 
     db.auth.onAuthStateChange(async (event, session) => {
+        // This flag prevents the listener from interfering with the manual login process.
         if (isManualLoginInProgress) {
             console.log("onAuthStateChange skipped during manual login.");
             return;
@@ -651,11 +652,14 @@
         const loadingSpinner = document.getElementById('loading-spinner');
         
         try {
+            // This event fires on page load if a session is found (AUTOMATIC LOGIN)
+            // or after a successful manual login.
             if (event === 'SIGNED_IN' && session && session.user) {
                 await initializeAppState(session.user, false); 
             } 
+            // This event fires after a logout or if the session becomes invalid.
+            // It's the single source of truth for handling the logged-out state.
             else if (event === 'SIGNED_OUT') {
-                // This is the single source of truth for logging out.
                 currentUser = null;
                 userProfile = null;
                 if (chatSubscription) {
@@ -674,12 +678,17 @@
             showToast('یک خطای پیش‌بینی نشده رخ داد.', 'error');
             await handleLogout();
         } finally {
+            // This hides the initial full-page spinner once auth state is resolved.
             loadingSpinner.style.display = 'none';
         }
     });
 
+    // Initial check when the app loads to decide if we show the login page
+    // or wait for the automatic login to complete.
     const initialSessionCheck = async () => {
         const { data: { session } } = await db.auth.getSession();
+        // If there's no session, the user needs to log in.
+        // We can show the login page immediately.
         if (!session) {
             isManualLoginInProgress = false;
             document.getElementById('loading-spinner').style.display = 'none';
@@ -687,7 +696,9 @@
             authPage.classList.add('active');
             showAuthView('phone-entry-view');
         }
-        // If a session exists, onAuthStateChange will handle it.
+        // If a session *does* exist, we do nothing here. The `onAuthStateChange`
+        // listener will fire with the 'SIGNED_IN' event and handle the automatic login.
+        // The full-page spinner will remain visible until that process is complete.
     };
     initialSessionCheck();
 
