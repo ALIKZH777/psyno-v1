@@ -17,7 +17,7 @@
     <!-- Chart.js for visualizations -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <!-- کتابخانه‌های تقویم فارسی -->
+    <!-- Persian Calendar Libraries -->
     <link rel="stylesheet" href="https://unpkg.com/persian-datepicker@1.2.0/dist/css/persian-datepicker.min.css"/>
     <script src="https://unpkg.com/jquery@3.3.1/dist/jquery.min.js"></script>
     <script src="https://unpkg.com/persian-date@1.1.0/dist/persian-date.min.js"></script>
@@ -162,12 +162,15 @@
 </head>
 <body class="bg-white">
 
+    <!-- Full-page loader for initial auth check -->
     <div id="loading-spinner" class="fixed inset-0 bg-white z-50 flex items-center justify-center">
         <div class="loader"></div>
     </div>
 
+    <!-- Global modal container -->
     <div id="modal-container" class="modal-backdrop"></div>
 
+    <!-- Authentication Page -->
     <div id="auth-page" class="page hidden bg-gradient-to-br from-teal-400 to-blue-500">
         <div class="w-full h-full flex items-center justify-center">
             <div class="w-full max-w-md m-auto p-8">
@@ -227,6 +230,7 @@
         </div>
     </div>
 
+    <!-- Main App Container -->
     <div id="app-container" class="hidden">
         <!-- Client Pages -->
         <div id="client-dashboard-page" class="page"></div>
@@ -249,6 +253,7 @@
         <!-- Admin Page -->
         <div id="admin-dashboard-page" class="page"></div>
         
+        <!-- Bottom Navigation Bar -->
         <div id="bottom-nav-bar" class="bottom-nav bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
         </div>
     </div>
@@ -274,6 +279,7 @@
         },
     });
     
+    // Global state variables
     let currentUser = null;
     let userProfile = null;
     let aiFeaturesEnabled = true;
@@ -297,7 +303,7 @@
     const renderAvatar = (containerEl, avatarUrl, options = {}) => {
         const { bgColor = 'bg-teal-100', iconColor = 'text-teal-600' } = options;
         if (avatarUrl) {
-            containerEl.innerHTML = `<img src="${avatarUrl}" class="w-full h-full object-cover rounded-full">`;
+            containerEl.innerHTML = `<img src="${avatarUrl}" class="w-full h-full object-cover rounded-full" onerror="this.onerror=null; this.parentElement.innerHTML = window.defaultAvatarSvg('${bgColor}', '${iconColor}');">`;
         } else {
             containerEl.innerHTML = defaultAvatarSvg(bgColor, iconColor);
         }
@@ -451,18 +457,17 @@
     const initializeAppState = async (user, isNewUser = false) => {
         currentUser = user;
         
-        const { data: profile, error: profileError } = await db.from('profiles').select('*').eq('id', currentUser.id).single();
-
-        if (profileError && profileError.code !== 'PGRST116') { // Ignore "No rows found" error
-            throw profileError;
-        }
-
-        if (isNewUser || !profile) {
-            // User is new or profile is missing, show details form
+        if (isNewUser) {
+            // User is new, backend has created a default profile. Show details form to update it.
             showAuthView('details-entry-view');
             hideActionSpinner();
         } else {
-            // Existing user with profile, enter the app
+            // Existing user, fetch their profile and enter the app.
+            const { data: profile, error: profileError } = await db.from('profiles').select('*').eq('id', currentUser.id).single();
+
+            if (profileError) {
+                throw profileError; // This should ideally not happen for existing users
+            }
             userProfile = profile;
             await setupUIForRole(userProfile.role);
             
@@ -578,7 +583,7 @@
                 throw new Error("اطلاعات کاربر یافت نشد. لطفاً دوباره وارد شوید.");
             }
             
-            // Update profile using edge function
+            // Update profile using the edge function, which returns the updated profile
             const { profile } = await invokeEdgeFunction('mediana-otp', {
                 action: 'update_profile',
                 userId: currentUser.id,
@@ -586,12 +591,19 @@
                 role
             });
 
-            // Re-initialize the app state with the newly created profile
-            await initializeAppState(currentUser, false);
-
+            // The profile is now updated. We can proceed directly to the app.
+            userProfile = profile; // Set the global profile object
+            await setupUIForRole(userProfile.role);
+            
+            appContainer.classList.remove('hidden');
+            authPage.classList.add('hidden');
+            authPage.classList.remove('active');
+            
+            isManualLoginInProgress = false; // End of manual flow
         } catch (error) {
             showToast(error.message, 'error');
             isManualLoginInProgress = false; // Abort manual flow
+        } finally {
             hideActionSpinner();
         }
     }
@@ -630,7 +642,7 @@
         try {
             if (event === 'SIGNED_IN' && session && session.user) {
                 // This handles session restoration on page refresh
-                await initializeAppState(session.user);
+                await initializeAppState(session.user, false); // isNewUser is false for session restoration
             } else if (event === 'SIGNED_OUT') {
                 currentUser = null;
                 userProfile = null;
@@ -754,8 +766,8 @@
                 <button onclick="goBackFromTraining()" class="text-gray-600"><i data-lucide="arrow-right"></i></button>
                 <h1 class="font-bold text-lg">بخش آموزش</h1>
             </header>
-            <div id="training-content-area" class="flex-grow relative bg-gray-100 flex items-center justify-center p-4">
-                <div id="training-loader" class="flex flex-col items-center justify-center text-center">
+            <div id="training-content-area" class="flex-grow relative">
+                <div id="training-loader" class="absolute inset-0 flex flex-col items-center justify-center text-center bg-gray-100">
                     <div class="loader"></div>
                     <p class="mt-4 text-gray-600">در حال بارگذاری بخش آموزش...</p>
                 </div>
@@ -773,7 +785,7 @@
 
         const showErrorState = () => {
             contentArea.innerHTML = `
-                <div class="text-center text-gray-700 animate-fadeIn">
+                <div class="w-full h-full flex flex-col items-center justify-center text-center text-gray-700 animate-fadeIn p-4">
                     <i data-lucide="cloud-off" class="w-16 h-16 mx-auto text-red-400"></i>
                     <h2 class="mt-4 text-xl font-bold">خطا در بارگذاری</h2>
                     <p class="mt-2 text-gray-500">متاسفانه نتوانستیم به بخش آموزش متصل شویم. لطفاً اتصال اینترنت خود را بررسی کرده و دوباره تلاش کنید.</p>
@@ -1717,50 +1729,57 @@
     const renderClientProfile = async () => {
         const page = document.getElementById('client-profile-page');
         page.innerHTML = `
-            <div class="p-4 space-y-6">
+             <div class="p-4 space-y-6">
                  <div class="flex flex-col items-center space-y-4">
-                      <div class="relative w-24 h-24">
-                           <div id="profile-page-avatar" class="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg"></div>
-                           <label for="avatar-upload" class="absolute bottom-0 right-0 bg-white p-1.5 rounded-full shadow-md cursor-pointer">
-                                <i data-lucide="camera" class="w-5 h-5 text-gray-600"></i>
-                                <input id="avatar-upload" type="file" class="hidden" accept="image/*" onchange="uploadProfilePicture(event)">
-                           </label>
-                      </div>
-                      <div class="text-center">
-                           <h1 class="text-2xl font-bold text-gray-800">${userProfile.full_name}</h1>
-                           <p class="text-gray-500">${userProfile.phone || 'شماره موبایل ثبت نشده'}</p>
-                      </div>
+                     <div class="relative w-24 h-24">
+                         <div id="profile-page-avatar" class="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg"></div>
+                         <label for="avatar-upload" class="absolute bottom-0 right-0 bg-white p-1.5 rounded-full shadow-md cursor-pointer">
+                             <i data-lucide="camera" class="w-5 h-5 text-gray-600"></i>
+                             <input id="avatar-upload" type="file" class="hidden" accept="image/*" onchange="uploadProfilePicture(event)">
+                         </label>
+                     </div>
+                     <div class="text-center">
+                         <h1 class="text-2xl font-bold text-gray-800">${userProfile.full_name}</h1>
+                         <p class="text-gray-500">${currentUser.phone || 'شماره موبایل ثبت نشده'}</p>
+                     </div>
                  </div>
 
                  <div class="bg-white p-2 rounded-2xl shadow-md">
-                      <a href="#" onclick="openProfileEditor()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
-                           <div class="flex items-center gap-4">
-                                <i data-lucide="edit" class="text-gray-600"></i>
-                                <span class="font-semibold text-gray-700">ویرایش اطلاعات کاربری</span>
-                           </div>
-                           <i data-lucide="chevron-left" class="text-gray-400"></i>
-                      </a>
-                      <a href="#" onclick="viewTestHistory()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
-                           <div class="flex items-center gap-4">
-                                <i data-lucide="clipboard-list" class="text-gray-600"></i>
-                                <span class="font-semibold text-gray-700">سوابق تست‌ها</span>
-                           </div>
-                           <i data-lucide="chevron-left" class="text-gray-400"></i>
-                      </a>
-                      <a href="#" onclick="showSupportRequest()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
-                           <div class="flex items-center gap-4">
-                                <i data-lucide="headphones" class="text-gray-600"></i>
-                                <span class="font-semibold text-gray-700">درخواست پشتیبانی</span>
-                           </div>
-                           <i data-lucide="chevron-left" class="text-gray-400"></i>
-                      </a>
-                       <div class="border-t my-1 mx-2"></div>
-                      <a href="#" onclick="handleLogout()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg text-red-500">
-                           <div class="flex items-center gap-4">
-                                <i data-lucide="log-out"></i>
-                                <span class="font-semibold">خروج</span>
-                           </div>
-                      </a>
+                     <a href="#" onclick="openProfileEditor()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
+                         <div class="flex items-center gap-4">
+                             <i data-lucide="edit" class="text-gray-600"></i>
+                             <span class="font-semibold text-gray-700">ویرایش اطلاعات کاربری</span>
+                         </div>
+                         <i data-lucide="chevron-left" class="text-gray-400"></i>
+                     </a>
+                     <a href="#" onclick="viewAppointmentHistory()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
+                         <div class="flex items-center gap-4">
+                             <i data-lucide="history" class="text-gray-600"></i>
+                             <span class="font-semibold text-gray-700">سوابق جلسات</span>
+                         </div>
+                         <i data-lucide="chevron-left" class="text-gray-400"></i>
+                     </a>
+                     <a href="#" onclick="viewTestHistory()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
+                         <div class="flex items-center gap-4">
+                             <i data-lucide="clipboard-list" class="text-gray-600"></i>
+                             <span class="font-semibold text-gray-700">سوابق تست‌ها</span>
+                         </div>
+                         <i data-lucide="chevron-left" class="text-gray-400"></i>
+                     </a>
+                     <a href="#" onclick="showSupportRequest()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
+                         <div class="flex items-center gap-4">
+                             <i data-lucide="headphones" class="text-gray-600"></i>
+                             <span class="font-semibold text-gray-700">درخواست پشتیبانی</span>
+                         </div>
+                         <i data-lucide="chevron-left" class="text-gray-400"></i>
+                     </a>
+                      <div class="border-t my-1 mx-2"></div>
+                     <a href="#" onclick="handleLogout()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg text-red-500">
+                         <div class="flex items-center gap-4">
+                             <i data-lucide="log-out"></i>
+                             <span class="font-semibold">خروج</span>
+                         </div>
+                     </a>
                  </div>
                  <p class="text-center text-gray-400 text-sm">نسخه نهایی</p>
                </div>
@@ -2263,7 +2282,7 @@
 
         const page = document.getElementById('therapist-profile-page');
         page.innerHTML = `
-            <div class="space-y-6">
+            <div class="p-4 space-y-6">
                 <div class="flex flex-col items-center space-y-4">
                     <div class="relative w-24 h-24">
                         <div id="therapist-profile-avatar" class="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg"></div>
@@ -2274,34 +2293,39 @@
                     </div>
                     <div class="text-center">
                         <h1 class="text-2xl font-bold">${userProfile.full_name}</h1>
-                        <p class="text-gray-500">${userProfile.phone || 'شماره موبایل ثبت نشده'}</p>
+                        <p class="text-gray-500">${currentUser.phone || 'شماره موبایل ثبت نشده'}</p>
                         <div class="mt-2 flex justify-center">${renderStars(userProfile.average_rating || 0, userProfile.total_ratings || 0)}</div>
                     </div>
                 </div>
                 
-                <div class="bg-white p-4 rounded-2xl shadow-md space-y-4">
-                    <h2 class="text-lg font-bold">ویرایش پروفایل تخصصی</h2>
-                    <div class="space-y-2">
-                        <label for="therapist-fullname-input" class="block text-sm font-medium text-gray-700">نام کامل</label>
-                        <input id="therapist-fullname-input" type="text" class="w-full p-2 border rounded-lg" value="${userProfile.full_name || ''}">
-                    </div>
-                     <div class="space-y-2">
-                        <label for="therapist-specialization-input" class="block text-sm font-medium text-gray-700">تخصص‌ها (با کاما جدا کنید)</label>
-                        <input id="therapist-specialization-input" type="text" class="w-full p-2 border rounded-lg" placeholder="مثال: CBT, روانکاوی" value="${userProfile.specialization || ''}">
-                    </div>
-                    <div class="space-y-2">
-                        <label for="therapist-bio-input" class="block text-sm font-medium text-gray-700">بیوگرافی تخصصی</label>
-                        <textarea id="therapist-bio-input" class="w-full h-24 p-2 border rounded-lg" placeholder="درباره سوابق و رویکرد درمانی خود بنویسید...">${userProfile.bio || ''}</textarea>
-                    </div>
-                    <button onclick="updateTherapistProfile()" class="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold">ذخیره تغییرات</button>
+                <div class="bg-white p-2 rounded-2xl shadow-md">
+                    <a href="#" onclick="openTherapistProfileEditor()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
+                        <div class="flex items-center gap-4">
+                            <i data-lucide="edit" class="text-gray-600"></i>
+                            <span class="font-semibold text-gray-700">ویرایش پروفایل تخصصی</span>
+                        </div>
+                        <i data-lucide="chevron-left" class="text-gray-400"></i>
+                    </a>
+                    <a href="#" onclick="viewAppointmentHistory()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
+                        <div class="flex items-center gap-4">
+                            <i data-lucide="history" class="text-gray-600"></i>
+                            <span class="font-semibold text-gray-700">سوابق جلسات</span>
+                        </div>
+                        <i data-lucide="chevron-left" class="text-gray-400"></i>
+                    </a>
+                    <div class="border-t my-1 mx-2"></div>
+                    <a href="#" onclick="handleLogout()" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg text-red-500">
+                        <div class="flex items-center gap-4">
+                            <i data-lucide="log-out"></i>
+                            <span class="font-semibold">خروج</span>
+                        </div>
+                    </a>
                 </div>
 
                 <div class="bg-white p-4 rounded-2xl shadow-md">
                     <h2 class="text-lg font-bold mb-3">نظرات مراجعین</h2>
                     <div id="therapist-reviews-list" class="space-y-3 max-h-64 overflow-y-auto"></div>
                 </div>
-
-                <button onclick="handleLogout()" class="w-full bg-red-500 text-white font-bold py-3 rounded-lg hover:bg-red-600 transition">خروج از حساب</button>
             </div>
         `;
         renderAvatar(document.getElementById('therapist-profile-avatar'), userProfile.avatar_url, { bgColor: 'bg-blue-100', iconColor: 'text-blue-600'});
@@ -2309,11 +2333,33 @@
         lucide.createIcons();
     };
 
+    const openTherapistProfileEditor = () => {
+        const content = `
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">نام کامل</label>
+                    <input id="therapist-fullname-input" type="text" class="mt-1 w-full p-2 border rounded-lg" value="${userProfile.full_name || ''}">
+                </div>
+                 <div>
+                    <label class="block text-sm font-medium text-gray-700">تخصص</label>
+                    <input id="therapist-specialization-input" type="text" class="mt-1 w-full p-2 border rounded-lg" value="${userProfile.specialization || ''}" placeholder="مثال: روانشناس بالینی">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">بیوگرافی</label>
+                    <textarea id="therapist-bio-input" class="mt-1 w-full h-24 p-2 border rounded-lg" placeholder="کمی درباره خود و تخصصتان بنویسید...">${userProfile.bio || ''}</textarea>
+                </div>
+                <button onclick="updateTherapistProfile()" class="w-full bg-teal-500 text-white py-2 rounded-lg font-semibold">ذخیره تغییرات</button>
+            </div>
+        `;
+        showModal('ویرایش پروفایل تخصصی', content);
+    };
+
     const updateTherapistProfile = async () => {
         const newName = document.getElementById('therapist-fullname-input').value;
         const newBio = document.getElementById('therapist-bio-input').value;
         const newSpec = document.getElementById('therapist-specialization-input').value;
-
+        
+        closeModal();
         showActionSpinner();
         const { data, error } = await db.from('profiles').update({ 
             full_name: newName,
@@ -2371,21 +2417,34 @@
 
 
     // =================================================================
-    // SHARED: CHAT PAGE (UPGRADED WITH OPTIMISTIC UI & TICKS)
+    // SHARED: CHAT & APPOINTMENT HISTORY
     // =================================================================
     const startChatWith = async (otherUserId) => {
-        const page = document.getElementById('chat-page');
+        showActionSpinner();
         const { data: otherUser, error } = await db.from('profiles').select('id, full_name, avatar_url').eq('id', otherUserId).single();
         if (error) {
+            hideActionSpinner();
             showToast('کاربر مورد نظر یافت نشد.', 'error');
             return;
         }
         
+        // Check the status of the latest appointment to determine if chat is read-only
+        const { data: latestAppointment } = await db
+            .from('appointments')
+            .select('status')
+            .or(`and(client_id.eq.${currentUser.id},therapist_id.eq.${otherUserId}),and(client_id.eq.${otherUserId},therapist_id.eq.${currentUser.id})`)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+        const isChatReadOnly = latestAppointment?.status === 'completed' && userProfile.role === 'client';
+
         let therapistControls = '';
-        if (userProfile.role === 'therapist') {
+        if (userProfile.role === 'therapist' && latestAppointment?.status === 'confirmed') {
             therapistControls = `<button onclick="confirmEndChat('${otherUserId}')" class="ml-auto text-xs bg-red-500 text-white font-semibold py-1 px-3 rounded-full">پایان گفتگو</button>`;
         }
 
+        const page = document.getElementById('chat-page');
         page.innerHTML = `
             <header class="bg-white shadow-sm p-3 flex items-center gap-3 flex-shrink-0">
                 <button onclick="goBackFromChat()" class="text-gray-600"><i data-lucide="arrow-right"></i></button>
@@ -2395,7 +2454,7 @@
             </header>
             <div id="chat-messages" class="flex-grow p-4 space-y-4 overflow-y-auto">
             </div>
-            <footer class="bg-white p-2 flex items-center gap-2 border-t flex-shrink-0">
+            <footer class="bg-white p-2 flex items-center gap-2 border-t flex-shrink-0 ${isChatReadOnly ? 'hidden' : ''}">
                 <label for="chat-image-upload" class="cursor-pointer p-2 text-gray-500 hover:text-teal-600 transition-colors">
                     <i data-lucide="paperclip"></i>
                 </label>
@@ -2411,22 +2470,23 @@
         page.style.padding = '0'; 
         navigateTo('chat-page');
 
-        const messageContainer = document.getElementById('chat-messages');
-        const sendBtn = document.getElementById('send-chat-btn');
-        const chatInput = document.getElementById('chat-input');
-        const chatImageUpload = document.getElementById('chat-image-upload');
+        if (!isChatReadOnly) {
+            const sendBtn = document.getElementById('send-chat-btn');
+            const chatInput = document.getElementById('chat-input');
+            const chatImageUpload = document.getElementById('chat-image-upload');
+            const boundSendMessage = () => handleSendMessage(otherUserId, chatInput);
+            const boundImageUpload = (event) => handleChatImageUpload(event, otherUserId);
 
-        const boundSendMessage = () => handleSendMessage(otherUserId, chatInput);
-        const boundImageUpload = (event) => handleChatImageUpload(event, otherUserId);
-
-        sendBtn.onclick = boundSendMessage;
-        chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') boundSendMessage();
-        });
-        chatImageUpload.onchange = boundImageUpload;
+            sendBtn.onclick = boundSendMessage;
+            chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') boundSendMessage();
+            });
+            chatImageUpload.onchange = boundImageUpload;
+        }
         
-        await loadMessages(otherUserId, messageContainer);
+        await loadMessages(otherUserId, document.getElementById('chat-messages'));
         await markMessagesAsRead(otherUserId);
+        hideActionSpinner();
 
         if (chatSubscription) chatSubscription.unsubscribe();
 
@@ -2440,6 +2500,7 @@
                 if (!isRelevant) return;
 
                 if (payload.eventType === 'INSERT' && newMessage.sender_id === otherUserId) {
+                    const messageContainer = document.getElementById('chat-messages');
                     messageContainer.innerHTML += renderMessage(newMessage);
                     messageContainer.scrollTop = messageContainer.scrollHeight;
                     lucide.createIcons();
@@ -2656,6 +2717,64 @@
         }
     };
 
+    const viewAppointmentHistory = async () => {
+        showActionSpinner();
+        const query = db.from('appointments')
+            .select('id, status, type, client:client_id(id, full_name), therapist:therapist_id(id, full_name), slot:slot_id(start_time)')
+            .order('created_at', { ascending: false });
+
+        if (userProfile.role === 'client') {
+            query.eq('client_id', currentUser.id);
+        } else {
+            query.eq('therapist_id', currentUser.id);
+        }
+
+        const { data, error } = await query;
+        hideActionSpinner();
+
+        if (error) {
+            showToast('خطا در دریافت سوابق.', 'error');
+            console.error("History Error:", error);
+            return;
+        }
+
+        let content = '<p class="text-center text-gray-500">هیچ سابقه‌ای یافت نشد.</p>';
+
+        if (data && data.length > 0) {
+            content = `<div class="space-y-3 max-h-[60vh] overflow-y-auto">
+                ${data.map(apt => {
+                    const otherUser = userProfile.role === 'client' ? apt.therapist : apt.client;
+                    if (!otherUser || !apt.slot) return '';
+                    const statusMap = {
+                        pending: { text: 'در انتظار', color: 'text-yellow-600' },
+                        confirmed: { text: 'تایید شده', color: 'text-blue-600' },
+                        completed: { text: 'پایان یافته', color: 'text-green-600' },
+                        cancelled: { text: 'لغو شده', color: 'text-gray-600' },
+                        declined: { text: 'رد شده', color: 'text-red-600' }
+                    };
+                    const statusInfo = statusMap[apt.status] || { text: apt.status, color: 'text-gray-600' };
+
+                    return `
+                        <div class="bg-gray-50 p-3 rounded-lg border">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <p class="font-semibold">${otherUser.full_name}</p>
+                                    <p class="text-sm text-gray-500">${apt.slot.start_time || 'زمان نامشخص'}</p>
+                                    <p class="text-xs font-bold mt-1 ${statusInfo.color}">${statusInfo.text}</p>
+                                </div>
+                                ${ (apt.status === 'confirmed' || apt.status === 'completed') ?
+                                `<button onclick="closeModal(); startChatWith('${otherUser.id}')" class="bg-teal-100 text-teal-700 text-sm font-semibold px-3 py-1 rounded-md">مشاهده چت</button>` : ''
+                                }
+                            </div>
+                        </div>
+                    `
+                }).join('')}
+            </div>`;
+        }
+        
+        showModal('سوابق جلسات', content);
+    };
+
 
     // =================================================================
     // ADMIN-SIDE RENDERING & LOGIC
@@ -2732,6 +2851,7 @@
     window.openProfileEditor = openProfileEditor;
     window.showSupportRequest = showSupportRequest;
     window.viewTestHistory = viewTestHistory;
+    window.openTherapistProfileEditor = openTherapistProfileEditor;
     window.updateTherapistProfile = updateTherapistProfile;
     window.viewClientDetails = viewClientDetails;
     window.startChatWith = startChatWith;
@@ -2751,6 +2871,8 @@
     window.submitReview = submitReview;
     window.confirmEndChat = confirmEndChat;
     window.endChat = endChat;
+    window.viewAppointmentHistory = viewAppointmentHistory;
+    window.defaultAvatarSvg = defaultAvatarSvg;
 
 </script>
 </body>
